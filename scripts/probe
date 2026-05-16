@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Run the standalone Nefit device probe (no Home Assistant needed).
+#
+#   scripts/probe                 # connect + read firmware/uiStatus/pressure
+#   scripts/probe --debug         # + full slixmpp wire log
+#   scripts/probe --get /ecus/rrc/uiStatus
+#
+# Credentials: NEFIT_SERIAL / NEFIT_ACCESS_KEY / NEFIT_PASSWORD env vars,
+# or a gitignored ./.nefit.env (KEY=VALUE lines).
+#
+# Uses a lightweight venv (.venv-probe) with only slixmpp + cryptography —
+# separate from the heavy HA test venv.
+
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+VENV=".venv-probe"
+PY="${PYTHON:-python3}"
+
+if [ ! -d "$VENV" ]; then
+  echo "==> Creating probe venv ($PY)"
+  if ! "$PY" -m venv "$VENV" 2>/dev/null; then
+    if ! "$PY" -m virtualenv --version >/dev/null 2>&1; then
+      "$PY" -m pip install --user --quiet --break-system-packages virtualenv
+    fi
+    "$PY" -m virtualenv "$VENV"
+  fi
+  # shellcheck disable=SC1091
+  source "$VENV/bin/activate"
+  python -m pip install --upgrade pip >/dev/null
+  # Match the versions the integration declares (manifest/requirements_test).
+  pip install --quiet "slixmpp==1.15.0" "cryptography>=41.0.0"
+else
+  # shellcheck disable=SC1091
+  source "$VENV/bin/activate"
+fi
+
+exec python scripts/nefit_probe.py "$@"

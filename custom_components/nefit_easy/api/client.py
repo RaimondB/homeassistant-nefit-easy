@@ -19,7 +19,7 @@ from .xmpp import NefitXMPP
 _LOGGER = logging.getLogger(__name__)
 
 _REQUEST_TIMEOUT = 30.0
-_USER_AGENT = "HomeAssistant"
+_USER_AGENT = "NefitEasy"
 
 
 class NefitClient:
