@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import ssl
 from collections.abc import Callable
 
 import slixmpp
@@ -50,29 +51,48 @@ class NefitXMPP(slixmpp.ClientXMPP):
         self._host = host
         self._port = port
         self._message_cb: Callable[[str], None] | None = None
-        self._connected_evt = asyncio.Event()
+        # _ready resolves either way; _error carries the failure reason so
+        # async_connect can raise instead of silently "succeeding".
+        self._ready = asyncio.Event()
+        self._error: Exception | None = None
         self._ping_task: asyncio.Task | None = None
 
-        # Bosch backend only offers SCRAM-SHA-1.
+        # Bosch only offers SCRAM-SHA-1; never fall back to PLAIN.
         self["feature_mechanisms"].unencrypted_plain = False
+
+        # The Bosch backend presents a certificate that does not validate
+        # against the public trust store. Every working Nefit client
+        # disables verification here; the message bodies are AES-encrypted
+        # independently of TLS, so confidentiality does not rely on it.
+        self.ssl_context.check_hostname = False
+        self.ssl_context.verify_mode = ssl.CERT_NONE
+
         self.add_event_handler("session_start", self._on_session_start)
         self.add_event_handler("message", self._on_message)
         self.add_event_handler("failed_auth", self._on_failed_auth)
+        self.add_event_handler("disconnected", self._on_disconnected)
 
     # -- lifecycle --------------------------------------------------------
     def set_message_callback(self, cb: Callable[[str], None]) -> None:
         self._message_cb = cb
 
     async def async_connect(self, timeout: float = 30.0) -> None:  # noqa: ASYNC109
-        """Connect and wait until the XMPP session is live."""
-        self._connected_evt.clear()
-        self.connect((self._host, self._port), use_ssl=False)
+        """Connect and wait until the XMPP session is live (or fail)."""
+        self._ready.clear()
+        self._error = None
+        # slixmpp 1.15: ClientXMPP.connect(host, port); STARTTLS is applied
+        # automatically. Returns a future we don't await — readiness is
+        # signalled via the session_start / failed_auth / disconnected events.
+        self.connect(self._host, self._port)
         try:
             async with asyncio.timeout(timeout):
-                await self._connected_evt.wait()
+                await self._ready.wait()
         except TimeoutError as err:
             self.disconnect()
             raise NefitConnectionError("Timed out establishing XMPP session") from err
+        if self._error is not None:
+            self.disconnect()
+            raise self._error
 
     async def async_disconnect(self) -> None:
         if self._ping_task:
@@ -83,13 +103,24 @@ class NefitXMPP(slixmpp.ClientXMPP):
     # -- event handlers ---------------------------------------------------
     async def _on_session_start(self, _event: object) -> None:
         self.send_presence()
-        self._connected_evt.set()
         if self._ping_task is None:
             self._ping_task = asyncio.create_task(self._ping_loop())
+        self._ready.set()
 
     def _on_failed_auth(self, _event: object) -> None:
-        self._connected_evt.set()  # unblock the waiter so it can raise
-        raise NefitAuthError("XMPP authentication failed (serial/access key)")
+        self._error = NefitAuthError(
+            "Authentication failed — check serial number, access key and password"
+        )
+        self._ready.set()
+
+    def _on_disconnected(self, reason: object) -> None:
+        # Only meaningful before we are ready; afterwards reconnects are fine.
+        if not self._ready.is_set():
+            if self._error is None:
+                self._error = NefitConnectionError(
+                    f"Disconnected before session start: {reason}"
+                )
+            self._ready.set()
 
     def _on_message(self, msg: slixmpp.stanza.Message) -> None:
         if self._message_cb and msg["type"] in ("chat", "normal"):
@@ -107,5 +138,9 @@ class NefitXMPP(slixmpp.ClientXMPP):
 
     # -- send -------------------------------------------------------------
     def send_body(self, body: str) -> None:
-        """Send a raw (already framed/encrypted) HTTP body to the gateway."""
-        self.send_message(mto=self._to, mfrom=self._from, mbody=body, mtype="chat")
+        """Send a raw (already framed/encrypted) HTTP body to the gateway.
+
+        Must be a ``normal`` message — the Bosch gateway ignores ``chat``
+        typed messages (matches nefit-easy-core / aionefit).
+        """
+        self.send_message(mto=self._to, mfrom=self._from, mbody=body, mtype="normal")

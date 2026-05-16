@@ -13,3 +13,6 @@ config/
 .storage/
 test-results.xml
 scripts/__pycache__/
+.claude/
+.venv-probe/
+.nefit.env
