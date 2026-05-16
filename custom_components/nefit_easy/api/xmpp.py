@@ -202,9 +202,23 @@ class NefitXMPP(slixmpp.ClientXMPP):
 
     # -- send -------------------------------------------------------------
     def send_body(self, body: str) -> None:
-        """Send a raw (already framed/encrypted) HTTP body to the gateway.
+        """Send the HTTP request to the gateway as a raw stanza.
 
-        Must be a ``normal`` message — the Bosch gateway ignores ``chat``
-        typed messages (matches nefit-easy-core / aionefit).
+        Built to be byte-identical to the reference (nefit-easy-core):
+        ``<message from="..." to="..."><body>...</body></message>`` with
+        no ``id``/``type``/``xml:lang`` attributes (slixmpp's helpers add
+        those, which the gateway rejects for writes with HTTP 400), and
+        every ``\\r`` serialised as the literal ``&#13;\\n`` so the
+        gateway's XML parser reconstructs CRLF.
+
+        ``body`` uses ``\\r`` separators (reference style); the CRLF
+        transformation happens here.
         """
-        self.send_message(mto=self._to, mfrom=self._from, mbody=body, mtype="normal")
+        escaped = (
+            body.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        ).replace("\r", "&#13;\n")
+        stanza = (
+            f'<message from="{self._from}" to="{self._to}">'
+            f"<body>{escaped}</body></message>"
+        )
+        self.send_raw(stanza)

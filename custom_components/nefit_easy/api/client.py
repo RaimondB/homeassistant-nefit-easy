@@ -91,14 +91,27 @@ class NefitClient:
         async with self._lock:
             loop = asyncio.get_running_loop()
             self._response = loop.create_future()
+            # Log the request line + headers only (never the encrypted
+            # body), with control chars made visible.
+            head = message.split("\r\n\r\n", 1)[0].split("\r\r", 1)[0]
+            _LOGGER.debug(
+                "--> request:\n%s",
+                head.replace("\r", "\\r").replace("\n", "\\n\n"),
+            )
             self._xmpp.send_body(message)
             try:
                 async with asyncio.timeout(_REQUEST_TIMEOUT):
-                    return await self._response
+                    raw = await self._response
             except TimeoutError as err:
                 raise NefitTimeoutError("No response from Nefit gateway") from err
             finally:
                 self._response = None
+            _LOGGER.debug(
+                "<-- response (%d bytes):\n%s",
+                len(raw),
+                raw.replace("\r", "\\r").replace("\n", "\\n\n")[:2000],
+            )
+            return raw
 
     async def get(self, uri: str) -> Any:
         """GET a Nefit endpoint and return the decoded JSON value."""
@@ -107,7 +120,14 @@ class NefitClient:
         if status == 401 or status == 403:
             raise NefitAuthError(f"Unauthorized for {uri}")
         if status != 200:
-            raise NefitConnectionError(f"GET {uri} -> HTTP {status}")
+            _LOGGER.error(
+                "GET %s -> HTTP %s; headers=%s body=%r",
+                uri,
+                status,
+                headers,
+                body[:500],
+            )
+            raise NefitConnectionError(f"GET {uri} -> HTTP {status}: {body[:200]}")
         if "application/json" in headers.get("content-type", ""):
             try:
                 return json.loads(self._crypto.decrypt(body))
@@ -118,8 +138,16 @@ class NefitClient:
 
     async def put(self, uri: str, data: Any) -> dict[str, str]:
         """PUT JSON ``data`` to a Nefit endpoint."""
-        payload = data if isinstance(data, str) else json.dumps(data)
+        # The Bosch gateway expects the compact JSON the reference client
+        # sends (e.g. {"value":19}); json.dumps' default ", "/": "
+        # separators are rejected with HTTP 400.
+        payload = (
+            data if isinstance(data, str) else json.dumps(data, separators=(",", ":"))
+        )
         encrypted = self._crypto.encrypt(payload)
+        # Reference-style \r separators; send_body() rewrites each \r to
+        # the literal "&#13;\n" so the gateway sees CRLF (matches
+        # nefit-easy-core exactly).
         msg = "\r".join(
             [
                 f"PUT {uri} HTTP/1.1",
@@ -130,9 +158,40 @@ class NefitClient:
                 encrypted,
             ]
         )
-        status, _headers, _body = self._parse_http(await self._request(msg))
+        status, headers, body = self._parse_http(await self._request(msg))
         if status in (401, 403):
             raise NefitAuthError(f"Unauthorized for {uri}")
         if status >= 300:
-            raise NefitConnectionError(f"PUT {uri} -> HTTP {status}")
+            _LOGGER.error(
+                "PUT %s -> HTTP %s; sent Content-Length=%d "
+                "payload=%r; response headers=%s body=%r",
+                uri,
+                status,
+                len(encrypted),
+                payload,
+                headers,
+                body[:500],
+            )
+            raise NefitConnectionError(f"PUT {uri} -> HTTP {status}: {body[:200]}")
+        return {"status": "ok"}
+
+    async def set_temperature(self, value: float) -> dict[str, str]:
+        """Set the manual room setpoint.
+
+        A lone write to temperatureRoomManual is rejected (HTTP 400); the
+        backend requires the full manual-override sequence, matching the
+        reference nefit-easy-commands implementation. Requests are
+        serialized by the single-flight lock in ``put``.
+        """
+        # Match the reference wire format: whole numbers as ints (19, not
+        # 19.0), halves as floats (19.5).
+        num: float | int = float(value)
+        if num.is_integer():
+            num = int(num)
+        data = {"value": num}
+        await self.put("/heatingCircuits/hc1/temperatureRoomManual", data)
+        await self.put(
+            "/heatingCircuits/hc1/manualTempOverride/status", {"value": "on"}
+        )
+        await self.put("/heatingCircuits/hc1/manualTempOverride/temperature", data)
         return {"status": "ok"}
