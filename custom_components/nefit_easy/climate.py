@@ -1,7 +1,19 @@
 """Climate platform for Nefit/Bosch Easy.
 
-Raw ``uiStatus`` field codes used: IHT (in-house temp), TSP (temp setpoint),
-UMD (user mode: "manual"/"clock"), BAI (boiler indicator), HMD (holiday).
+Two independent device concepts, kept separate:
+
+* Program/user mode ``UMD`` ("manual"/"clock") -> ``hvac_mode``
+  HEAT/AUTO. Changing the setpoint makes the device auto-flip to
+  ``manual``; that flip is observed via the coordinator refresh, not set
+  here explicitly.
+* Boiler indicator ``BAI`` (CH/HW/No) is read-only status. HA's
+  ``HVACAction`` has no "hot water", so it maps lossily here (CH->HEATING,
+  else IDLE); the full off/central-heating/hot-water state is exposed
+  separately by the ``boiler_indicator`` enum sensor.
+
+Raw ``uiStatus`` field codes used: IHT (in-house temp), TSP (temp
+setpoint), UMD (user mode), BAI (boiler indicator), HMD (holiday),
+FPA (fireplace).
 """
 
 from __future__ import annotations
@@ -26,6 +38,15 @@ from .entity import NefitEntity
 PRESET_FIREPLACE = "fireplace"
 PRESET_HOLIDAY = "holiday"
 PRESET_NONE = "none"
+
+# BAI is read-only. HVACAction has no "hot water" member, so HW and the
+# burner-idle "No" both map to IDLE (the room circuit is not being
+# served); the full tri-state is the boiler_indicator sensor instead.
+_BAI_TO_ACTION = {
+    "CH": HVACAction.HEATING,
+    "HW": HVACAction.IDLE,
+    "No": HVACAction.IDLE,
+}
 
 
 async def async_setup_entry(
@@ -75,9 +96,7 @@ class NefitClimate(NefitEntity, ClimateEntity):
 
     @property
     def hvac_action(self) -> HVACAction:
-        return (
-            HVACAction.HEATING if self._status.get("BAI") == "CH" else HVACAction.IDLE
-        )
+        return _BAI_TO_ACTION.get(self._status.get("BAI"), HVACAction.IDLE)
 
     @property
     def preset_mode(self) -> str:
@@ -90,6 +109,9 @@ class NefitClimate(NefitEntity, ClimateEntity):
     async def async_set_temperature(self, **kwargs: Any) -> None:
         if (temp := kwargs.get(ATTR_TEMPERATURE)) is None:
             return
+        # The device auto-flips UMD to "manual" until the next scheduled
+        # switch point; we don't set the mode here — the refresh below
+        # surfaces UMD=manual and hvac_mode becomes HEAT.
         await self.coordinator.client.set_temperature(float(temp))
         await self.coordinator.async_request_refresh()
 
