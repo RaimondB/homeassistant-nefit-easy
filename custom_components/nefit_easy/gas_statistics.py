@@ -118,9 +118,10 @@ class NefitGasStatistics:
         pointer = await self._client.gas_usage_pointer()
         if pointer <= 0:
             return []
+        # Pages are 1-indexed (page=0 is rejected with HTTP 400).
         pages = math.ceil(pointer / GAS_PAGE_SIZE)
         # Incremental: only the newest (last) page; full: every page.
-        page_range = range(pages) if full else range(max(pages - 1, 0), pages)
+        page_range = range(1, pages + 1) if full else range(pages, pages + 1)
         rows: list[dict[str, Any]] = []
         for i, page in enumerate(page_range):
             if self._hass.is_stopping:

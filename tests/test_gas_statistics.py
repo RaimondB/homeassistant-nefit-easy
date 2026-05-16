@@ -100,8 +100,8 @@ def _make(monkeypatch, *, pages: dict[int, list[dict]], pointer: int):
 
 async def test_backfill_pagination_sums_and_total(monkeypatch) -> None:
     pages = {
-        0: [_row(date(2024, 1, 1), 10.0, 2.0, 5.0)],
-        1: [_row(date(2024, 1, 2), 4.0, 1.0, 6.0)],
+        1: [_row(date(2024, 1, 1), 10.0, 2.0, 5.0)],
+        2: [_row(date(2024, 1, 2), 4.0, 1.0, 6.0)],
     }
     gas, added, _ = _make(monkeypatch, pages=pages, pointer=33)  # ceil(33/32)=2
 
@@ -128,7 +128,7 @@ async def test_backfill_pagination_sums_and_total(monkeypatch) -> None:
 
 
 async def test_metadata_objects(monkeypatch) -> None:
-    pages = {0: [_row(date(2024, 1, 1), 1.0, 1.0, 3.0)]}
+    pages = {1: [_row(date(2024, 1, 1), 1.0, 1.0, 3.0)]}
     gas, added, _ = _make(monkeypatch, pages=pages, pointer=1)
     await gas.async_backfill()
     meta_by_id = {m["statistic_id"]: m for m, _ in added}
@@ -143,7 +143,7 @@ async def test_metadata_objects(monkeypatch) -> None:
 
 
 async def test_idempotent_resume(monkeypatch) -> None:
-    pages = {0: [_row(date(2024, 1, 1), 10.0, 2.0, 5.0)]}
+    pages = {1: [_row(date(2024, 1, 1), 10.0, 2.0, 5.0)]}
     gas, added, last = _make(monkeypatch, pages=pages, pointer=1)
 
     # Pretend everything up to and including 2024-01-01 was already stored.
@@ -162,14 +162,14 @@ async def test_idempotent_resume(monkeypatch) -> None:
 
 async def test_incremental_last_page_only(monkeypatch) -> None:
     pages = {
-        0: [_row(date(2024, 1, 1), 9.0, 0.0, 1.0)],
-        2: [_row(date(2024, 3, 1), 3.0, 0.0, 2.0)],
+        1: [_row(date(2024, 1, 1), 9.0, 0.0, 1.0)],
+        3: [_row(date(2024, 3, 1), 3.0, 0.0, 2.0)],
     }
-    gas, added, _ = _make(monkeypatch, pages=pages, pointer=70)  # ceil=3, last=2
+    gas, added, _ = _make(monkeypatch, pages=pages, pointer=70)  # ceil=3, last=3
     await gas.async_daily()
     ch = next(s for m, s in added if m["statistic_id"] == STAT_ID_CH)
     assert [s["state"] for s in ch] == [3.0]
-    gas._client.gas_usage.assert_awaited_once_with(2)
+    gas._client.gas_usage.assert_awaited_once_with(3)
 
 
 async def test_import_swallows_nefit_error(monkeypatch) -> None:
