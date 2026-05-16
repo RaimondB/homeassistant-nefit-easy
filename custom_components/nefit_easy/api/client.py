@@ -195,3 +195,32 @@ class NefitClient:
         )
         await self.put("/heatingCircuits/hc1/manualTempOverride/temperature", data)
         return {"status": "ok"}
+
+    @staticmethod
+    def _dhw_uri(user_mode: str | None) -> str:
+        """Hot-water endpoint depends on the active program mode."""
+        return (
+            "/dhwCircuits/dhwA/dhwOperationClockMode"
+            if user_mode == "clock"
+            else "/dhwCircuits/dhwA/dhwOperationManualMode"
+        )
+
+    async def get_hot_water_supply(self, user_mode: str | None) -> str | None:
+        """Return the hot-water supply setting ("on"/"off")."""
+        result = await self.get(self._dhw_uri(user_mode))
+        return result.get("value") if isinstance(result, dict) else None
+
+    async def set_hot_water_supply(
+        self, on: bool, user_mode: str | None
+    ) -> dict[str, str]:
+        """Enable/disable hot-water supply (program-mode aware)."""
+        return await self.put(
+            self._dhw_uri(user_mode), {"value": "on" if on else "off"}
+        )
+
+    async def set_fireplace_mode(self, on: bool) -> dict[str, str]:
+        """Enable/disable fireplace mode."""
+        return await self.put(
+            "/ecus/rrc/userprogram/fireplacefunction",
+            {"value": "on" if on else "off"},
+        )

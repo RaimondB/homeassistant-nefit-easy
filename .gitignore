@@ -16,3 +16,4 @@ scripts/__pycache__/
 .claude/
 .venv-probe/
 .nefit.env
+scripts/hass.log
