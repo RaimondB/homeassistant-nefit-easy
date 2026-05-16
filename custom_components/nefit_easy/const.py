@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Final
 
 DOMAIN: Final = "nefit_easy"
@@ -47,6 +48,24 @@ URI_TEMP_OVERRIDE_STATUS: Final = "/heatingCircuits/hc1/manualTempOverride/statu
 URI_TEMP_OVERRIDE_TEMP: Final = "/heatingCircuits/hc1/manualTempOverride/temperature"
 URI_FIREPLACE: Final = "/ecus/rrc/userprogram/fireplacefunction"
 
-# --- Phase 3 (gas usage, deferred) ---------------------------------------
+# --- Phase 3 (gas-usage history -> long-term statistics) -----------------
 URI_GASUSAGE_POINTER: Final = "/ecus/rrc/recordings/gasusagePointer"
 URI_GASUSAGE_PAGE: Final = "/ecus/rrc/recordings/gasusage?page={page}"
+
+# External statistic ids (source == DOMAIN, "<source>:<object_id>").
+STAT_ID_CH: Final = f"{DOMAIN}:gas_central_heating"
+STAT_ID_HW: Final = f"{DOMAIN}:gas_hot_water"
+STAT_ID_TOTAL: Final = f"{DOMAIN}:gas_total"
+STAT_ID_OUTDOOR: Final = f"{DOMAIN}:gas_outdoor_temp"
+
+# 32 records per page; device pads unused slots with this sentinel date.
+GAS_PAGE_SIZE: Final = 32
+GAS_SENTINEL_DATE: Final = "255-256-65535"
+# Pace page fetches to respect the cloud's aggressive rate limiting.
+GAS_PAGE_DELAY_SECONDS: Final = 5
+GAS_DAILY_INTERVAL: Final = timedelta(hours=24)
+
+CONF_IMPORT_GAS_HISTORY: Final = "import_gas_history"
+DEFAULT_IMPORT_GAS_HISTORY: Final = False
+
+SERVICE_IMPORT_GAS_HISTORY: Final = "import_gas_history"

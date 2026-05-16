@@ -34,6 +34,29 @@ dependency.
 4. Enter **serial number**, **access key** and **password** (the same
    credentials the Bosch/Nefit app uses).
 
+## Gas-usage statistics (optional)
+
+The boiler stores a daily gas-usage history. Enabling **Import gas-usage
+history** in the integration options publishes four long-term statistics:
+
+- `nefit_easy:gas_central_heating` — daily CH gas (kWh)
+- `nefit_easy:gas_hot_water` — daily hot-water gas (kWh)
+- `nefit_easy:gas_total` — CH + HW (kWh)
+- `nefit_easy:gas_outdoor_temp` — daily mean outdoor temperature (°C)
+
+On first enable the full history is back-filled, paced ~5 s per page to
+respect the cloud rate limit, then refreshed daily. The
+`nefit_easy.import_gas_history` service re-runs the full import on
+demand (idempotent). Disabling the option leaves already-imported
+statistics in place.
+
+These statistics are **not** added to the Energy dashboard
+automatically. If you want them there, add `nefit_easy:gas_total` (or
+the CH/HW split) under **Settings → Energy → Gas consumption** yourself.
+This is primarily useful if you do **not** have a smart gas meter — it
+is not a meter replacement, but the boiler's CH-vs-HW split is an
+insight a whole-house meter cannot provide.
+
 ## Notes
 
 - The Nefit cloud throttles to roughly one request per minute; the poll

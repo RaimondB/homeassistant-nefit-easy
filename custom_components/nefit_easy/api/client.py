@@ -10,9 +10,15 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from datetime import date
 from functools import partial
 from typing import TYPE_CHECKING, Any
 
+from ..const import (
+    GAS_SENTINEL_DATE,
+    URI_GASUSAGE_PAGE,
+    URI_GASUSAGE_POINTER,
+)
 from .crypto import NefitCrypto
 from .errors import NefitAuthError, NefitConnectionError, NefitTimeoutError
 from .xmpp import NefitXMPP
@@ -217,6 +223,41 @@ class NefitClient:
         return await self.put(
             self._dhw_uri(user_mode), {"value": "on" if on else "off"}
         )
+
+    # -- Gas-usage history (Phase 3) -------------------------------------
+    async def gas_usage_pointer(self) -> int:
+        """Number of recorded gas-usage days available on the device."""
+        result = await self.get(URI_GASUSAGE_POINTER)
+        return int(result["value"]) if isinstance(result, dict) else 0
+
+    async def gas_usage(self, page: int) -> list[dict[str, Any]]:
+        """Return one page (≤32) of daily gas-usage records.
+
+        Each record: ``{date: date, ch_kwh: float, hw_kwh: float,
+        outdoor_temp: float}``. The device pads unused slots with the
+        sentinel date ``255-256-65535``; those and any malformed rows are
+        skipped (logged, not fatal) so a partial page still yields data.
+        """
+        result = await self.get(URI_GASUSAGE_PAGE.format(page=page))
+        rows = result.get("value") or [] if isinstance(result, dict) else []
+        days: list[dict[str, Any]] = []
+        for row in rows:
+            raw_date = row.get("d")
+            if raw_date == GAS_SENTINEL_DATE:
+                continue
+            try:
+                day, month, year = (int(p) for p in raw_date.split("-"))
+                days.append(
+                    {
+                        "date": date(year, month, day),
+                        "ch_kwh": float(row["ch"]),
+                        "hw_kwh": float(row["hw"]),
+                        "outdoor_temp": float(row["T"]) / 10.0,
+                    }
+                )
+            except (AttributeError, KeyError, TypeError, ValueError):
+                _LOGGER.warning("Skipping malformed gas-usage row: %r", row)
+        return days
 
     async def set_fireplace_mode(self, on: bool) -> dict[str, str]:
         """Enable/disable fireplace mode."""
