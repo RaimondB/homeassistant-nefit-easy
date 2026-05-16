@@ -34,10 +34,26 @@
   },
   "entity": {
     "sensor": {
-      "system_pressure": { "name": "System pressure" },
-      "supply_temperature": { "name": "Supply temperature" },
-      "outdoor_temperature": { "name": "Outdoor temperature" },
-      "indoor_temperature": { "name": "Indoor temperature" }
+      "system_pressure": {
+        "name": "System pressure"
+      },
+      "supply_temperature": {
+        "name": "Supply temperature"
+      },
+      "outdoor_temperature": {
+        "name": "Outdoor temperature"
+      },
+      "indoor_temperature": {
+        "name": "Indoor temperature"
+      },
+      "boiler_indicator": {
+        "name": "Boiler indicator",
+        "state": {
+          "off": "Off",
+          "central_heating": "Central heating",
+          "hot_water": "Hot water"
+        }
+      }
     }
   }
 }
