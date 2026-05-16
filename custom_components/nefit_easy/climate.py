@@ -49,8 +49,7 @@ class NefitClimate(NefitEntity, ClimateEntity):
     _attr_hvac_modes = [HVACMode.HEAT, HVACMode.AUTO]
     _attr_preset_modes = [PRESET_NONE, PRESET_FIREPLACE, PRESET_HOLIDAY]
     _attr_supported_features = (
-        ClimateEntityFeature.TARGET_TEMPERATURE
-        | ClimateEntityFeature.PRESET_MODE
+        ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.PRESET_MODE
     )
     _attr_min_temp = 5
     _attr_max_temp = 30
@@ -81,9 +80,7 @@ class NefitClimate(NefitEntity, ClimateEntity):
     @property
     def hvac_action(self) -> HVACAction:
         return (
-            HVACAction.HEATING
-            if self._status.get("BAI") == "CH"
-            else HVACAction.IDLE
+            HVACAction.HEATING if self._status.get("BAI") == "CH" else HVACAction.IDLE
         )
 
     @property
