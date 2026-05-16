@@ -1,6 +1,7 @@
 {
   "domain": "nefit_easy",
   "name": "Nefit/Bosch Easy",
+  "after_dependencies": ["recorder"],
   "codeowners": ["@RaimondB"],
   "config_flow": true,
   "documentation": "https://github.com/RaimondB/homeassistant-nefit-easy",

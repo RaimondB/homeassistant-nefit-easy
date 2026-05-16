@@ -24,12 +24,19 @@
       "init": {
         "title": "Options",
         "data": {
-          "scan_interval": "Poll interval (seconds, minimum 60)"
+          "scan_interval": "Poll interval (seconds, minimum 60)",
+          "import_gas_history": "Import gas-usage history into long-term statistics"
         }
       }
     },
     "error": {
       "scan_interval_too_low": "The Nefit cloud rate-limits to ~60s; use 60 or more."
+    }
+  },
+  "services": {
+    "import_gas_history": {
+      "name": "Import gas-usage history",
+      "description": "Fetch the full daily gas-usage history from the boiler and import it into Home Assistant long-term statistics. Paced to respect the Nefit cloud rate limit; safe to run repeatedly (idempotent)."
     }
   },
   "entity": {

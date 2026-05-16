@@ -16,9 +16,11 @@ from homeassistant.core import HomeAssistant, callback
 from .api import NefitAuthError, NefitError, async_create_client
 from .const import (
     CONF_ACCESS_KEY,
+    CONF_IMPORT_GAS_HISTORY,
     CONF_PASSWORD,
     CONF_SCAN_INTERVAL,
     CONF_SERIAL_NUMBER,
+    DEFAULT_IMPORT_GAS_HISTORY,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     MIN_SCAN_INTERVAL,
@@ -99,11 +101,15 @@ class NefitOptionsFlow(OptionsFlow):
                 return self.async_create_entry(title="", data=user_input)
 
         current = self._entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+        gas = self._entry.options.get(
+            CONF_IMPORT_GAS_HISTORY, DEFAULT_IMPORT_GAS_HISTORY
+        )
         schema = vol.Schema(
             {
                 vol.Required(CONF_SCAN_INTERVAL, default=current): vol.All(
                     vol.Coerce(int), vol.Range(min=MIN_SCAN_INTERVAL)
-                )
+                ),
+                vol.Optional(CONF_IMPORT_GAS_HISTORY, default=gas): bool,
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema, errors=errors)
