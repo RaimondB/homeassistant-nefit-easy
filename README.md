@@ -40,6 +40,31 @@ dependency.
   interval has a hard 60-second floor.
 - Credentials are never logged; diagnostics output is redacted.
 
+## Troubleshooting
+
+If setup fails with *"Could not connect to the Nefit cloud"*, enable debug
+logging to see the real reason (DNS failure, connection refused, TLS,
+auth, timeout). Add to `configuration.yaml` and restart:
+
+```yaml
+logger:
+  default: info
+  logs:
+    custom_components.nefit_easy: debug
+    slixmpp: debug
+```
+
+Connection errors are logged at **ERROR** level (visible without debug);
+`slixmpp: debug` additionally shows the full XMPP wire trace.
+
+Common cause: the **Home Assistant host cannot resolve or reach**
+`wa2-mz36-qrmzh6.bosch.de:5222` (container DNS, firewall, or network
+egress) even when another machine on the LAN can. Verify from the HA
+host/container itself.
+
+For protocol-level debugging without Home Assistant, use the
+[`scripts/probe`](scripts/probe) standalone tool in this repo.
+
 ## License
 
 MIT — see [LICENSE](LICENSE). Protocol originally reverse-engineered by
