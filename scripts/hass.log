@@ -1,0 +1,19 @@
+This error originated from a custom integration.
+
+Logger: custom_components.nefit_easy.api.xmpp
+Source: custom_components/nefit_easy/api/xmpp.py:150
+Integration: Nefit/Bosch Easy (documentation, issues)
+First occurred: 17:12:01 (1 occurrence)
+Last logged: 17:12:01
+
+TCP/TLS connection to wa2-mz36-qrmzh6.bosch.de:5222 failed: [SSL: RECORD_LAYER_FAILURE] record layer failure (_ssl.c:1081)
+
+This error originated from a custom integration.
+
+Logger: custom_components.nefit_easy.api.xmpp
+Source: custom_components/nefit_easy/api/xmpp.py:120
+Integration: Nefit/Bosch Easy (documentation, issues)
+First occurred: 17:12:01 (1 occurrence)
+Last logged: 17:12:01
+
+Connection to Nefit backend failed: Could not reach wa2-mz36-qrmzh6.bosch.de:5222: [SSL: RECORD_LAYER_FAILURE] record layer failure (_ssl.c:1081)

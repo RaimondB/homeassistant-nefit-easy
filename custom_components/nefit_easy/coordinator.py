@@ -58,6 +58,9 @@ class NefitDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             data["outdoorTemperature"] = (await self.client.get(URI_OUTDOOR_TEMP)).get(
                 "value"
             )
+            data["hotWaterSupply"] = await self.client.get_hot_water_supply(
+                data["uiStatus"].get("UMD")
+            )
         except NefitAuthError as err:
             raise ConfigEntryAuthFailed(str(err)) from err
         except NefitError as err:
