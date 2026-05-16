@@ -11,9 +11,9 @@ from homeassistant.config_entries import (
     ConfigFlowResult,
     OptionsFlow,
 )
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 
-from .api import NefitAuthError, NefitClient, NefitError
+from .api import NefitAuthError, NefitError, async_create_client
 from .const import (
     CONF_ACCESS_KEY,
     CONF_PASSWORD,
@@ -26,9 +26,11 @@ from .const import (
 )
 
 
-async def _validate(serial: str, access_key: str, password: str) -> None:
+async def _validate(
+    hass: HomeAssistant, serial: str, access_key: str, password: str
+) -> None:
     """Connect and do one firmware GET to prove the credentials work."""
-    client = NefitClient(serial, access_key, password)
+    client = await async_create_client(hass, serial, access_key, password)
     try:
         await client.connect()
         await client.get(URI_FIRMWARE)
@@ -51,6 +53,7 @@ class NefitConfigFlow(ConfigFlow, domain=DOMAIN):
             self._abort_if_unique_id_configured()
             try:
                 await _validate(
+                    self.hass,
                     serial,
                     user_input[CONF_ACCESS_KEY],
                     user_input[CONF_PASSWORD],
