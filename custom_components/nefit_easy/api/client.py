@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from functools import partial
 from typing import TYPE_CHECKING, Any
 
 from .crypto import NefitCrypto
@@ -28,22 +29,33 @@ _USER_AGENT = "NefitEasy"
 async def async_create_client(
     hass: HomeAssistant, serial_number: str, access_key: str, password: str
 ) -> NefitClient:
-    """Build a NefitClient off the event loop.
+    """Build a NefitClient off the event loop, bound to HA's loop.
 
     slixmpp's ClientXMPP.__init__ creates an ssl.SSLContext, which does
-    blocking disk I/O (load_default_certs / set_default_verify_paths).
-    Constructing in an executor keeps that off the HA event loop.
+    blocking disk I/O (load_default_certs / set_default_verify_paths), so
+    construction is offloaded to an executor. But slixmpp also binds to
+    the event loop at construction time — in a worker thread that would
+    be a dead loop. Capture HA's running loop here and inject it
+    explicitly so slixmpp schedules its connection on the right loop.
     """
+    loop = asyncio.get_running_loop()
     return await hass.async_add_executor_job(
-        NefitClient, serial_number, access_key, password
+        partial(NefitClient, serial_number, access_key, password, loop=loop)
     )
 
 
 class NefitClient:
     """Connected, single-flight Nefit Easy API client."""
 
-    def __init__(self, serial_number: str, access_key: str, password: str) -> None:
-        self._xmpp = NefitXMPP(serial_number, access_key, password)
+    def __init__(
+        self,
+        serial_number: str,
+        access_key: str,
+        password: str,
+        *,
+        loop: asyncio.AbstractEventLoop | None = None,
+    ) -> None:
+        self._xmpp = NefitXMPP(serial_number, access_key, password, loop=loop)
         self._crypto = NefitCrypto(access_key, password)
         self._lock = asyncio.Lock()
         self._response: asyncio.Future[str] | None = None
