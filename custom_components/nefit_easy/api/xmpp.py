@@ -71,6 +71,8 @@ class NefitXMPP(slixmpp.ClientXMPP):
         self.add_event_handler("message", self._on_message)
         self.add_event_handler("failed_auth", self._on_failed_auth)
         self.add_event_handler("disconnected", self._on_disconnected)
+        self.add_event_handler("connection_failed", self._on_connection_failed)
+        self.add_event_handler("session_bind", self._on_session_bind)
 
     # -- lifecycle --------------------------------------------------------
     def set_message_callback(self, cb: Callable[[str], None]) -> None:
@@ -80,6 +82,12 @@ class NefitXMPP(slixmpp.ClientXMPP):
         """Connect and wait until the XMPP session is live (or fail)."""
         self._ready.clear()
         self._error = None
+        _LOGGER.debug(
+            "Connecting to Nefit backend %s:%s as %s",
+            self._host,
+            self._port,
+            self._from,
+        )
         # slixmpp 1.15: ClientXMPP.connect(host, port); STARTTLS is applied
         # automatically. Returns a future we don't await — readiness is
         # signalled via the session_start / failed_auth / disconnected events.
@@ -88,11 +96,25 @@ class NefitXMPP(slixmpp.ClientXMPP):
             async with asyncio.timeout(timeout):
                 await self._ready.wait()
         except TimeoutError as err:
+            _LOGGER.error(
+                "Timed out after %ss connecting to %s:%s — no XMPP session. "
+                "Check that the Home Assistant host can resolve and reach "
+                "%s on port %s (DNS / firewall / network).",
+                timeout,
+                self._host,
+                self._port,
+                self._host,
+                self._port,
+            )
             self.disconnect()
-            raise NefitConnectionError("Timed out establishing XMPP session") from err
+            raise NefitConnectionError(
+                f"Timed out establishing XMPP session to {self._host}:{self._port}"
+            ) from err
         if self._error is not None:
+            _LOGGER.error("Connection to Nefit backend failed: %s", self._error)
             self.disconnect()
             raise self._error
+        _LOGGER.debug("Nefit XMPP session established")
 
     async def async_disconnect(self) -> None:
         if self._ping_task:
@@ -101,26 +123,52 @@ class NefitXMPP(slixmpp.ClientXMPP):
         self.disconnect()
 
     # -- event handlers ---------------------------------------------------
+    def _on_session_bind(self, jid: object) -> None:
+        _LOGGER.debug("XMPP resource bound: %s", jid)
+
     async def _on_session_start(self, _event: object) -> None:
+        _LOGGER.debug("XMPP session started; sending presence")
         self.send_presence()
         if self._ping_task is None:
             self._ping_task = asyncio.create_task(self._ping_loop())
         self._ready.set()
 
     def _on_failed_auth(self, _event: object) -> None:
+        _LOGGER.warning("Nefit authentication rejected by the backend")
         self._error = NefitAuthError(
             "Authentication failed — check serial number, access key and password"
         )
         self._ready.set()
 
+    def _on_connection_failed(self, reason: object) -> None:
+        _LOGGER.error(
+            "TCP/TLS connection to %s:%s failed: %s",
+            self._host,
+            self._port,
+            reason,
+        )
+        if not self._ready.is_set():
+            if self._error is None:
+                self._error = NefitConnectionError(
+                    f"Could not reach {self._host}:{self._port}: {reason}"
+                )
+            self._ready.set()
+
     def _on_disconnected(self, reason: object) -> None:
         # Only meaningful before we are ready; afterwards reconnects are fine.
         if not self._ready.is_set():
+            _LOGGER.error(
+                "Disconnected from %s before session start: %s",
+                self._host,
+                reason,
+            )
             if self._error is None:
                 self._error = NefitConnectionError(
                     f"Disconnected before session start: {reason}"
                 )
             self._ready.set()
+        else:
+            _LOGGER.debug("XMPP disconnected: %s", reason)
 
     def _on_message(self, msg: slixmpp.stanza.Message) -> None:
         if self._message_cb and msg["type"] in ("chat", "normal"):
