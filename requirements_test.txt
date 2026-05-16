@@ -1,4 +1,9 @@
-pytest-homeassistant-custom-component
+# Pin pytest-homeassistant-custom-component: it transitively pins an exact
+# Home Assistant (and thus cryptography). Leaving it unpinned lets pip
+# backtrack into ancient HA when any constraint conflicts.
+# cryptography is intentionally NOT listed here — Home Assistant pins it
+# (currently 44.x); our manifest only needs the >=41 floor. slixmpp is
+# not an HA dependency, so it must be pinned explicitly.
+pytest-homeassistant-custom-component==0.13.205
 ruff
 slixmpp==1.15.0
-cryptography>=41.0.0
