@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Local CI — mirrors .github/workflows/ci.yml exactly so failures can be
+# reproduced and fixed before pushing.
+#
+#   scripts/ci            # full run: lint + format + tests
+#   scripts/ci lint       # ruff check only
+#   scripts/ci format     # ruff format --check only
+#   scripts/ci test       # pytest only
+#   scripts/ci fix        # ruff check --fix + ruff format (mutating)
+#
+# First run creates .venv and installs requirements_test.txt.
+
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+VENV=".venv"
+PY="${PYTHON:-python3}"
+
+if [ ! -d "$VENV" ]; then
+  echo "==> Creating venv ($PY)"
+  if ! "$PY" -m venv "$VENV" 2>/dev/null; then
+    echo "==> stdlib venv unavailable; bootstrapping virtualenv"
+    if ! "$PY" -m virtualenv --version >/dev/null 2>&1; then
+      "$PY" -m pip install --user --quiet --break-system-packages virtualenv
+    fi
+    "$PY" -m virtualenv "$VENV"
+  fi
+  # shellcheck disable=SC1091
+  source "$VENV/bin/activate"
+  python -m pip install --upgrade pip setuptools wheel >/dev/null
+  echo "==> Installing requirements_test.txt (this is slow the first time)"
+  pip install -r requirements_test.txt
+else
+  # shellcheck disable=SC1091
+  source "$VENV/bin/activate"
+fi
+
+run_lint()   { echo "==> ruff check";          ruff check .; }
+run_format() { echo "==> ruff format --check"; ruff format --check .; }
+run_test()   { echo "==> pytest";              pytest --junitxml=test-results.xml; }
+
+case "${1:-all}" in
+  lint)   run_lint ;;
+  format) run_format ;;
+  test)   run_test ;;
+  fix)    ruff check --fix .; ruff format . ;;
+  all)    run_lint; run_format; run_test ;;
+  *) echo "usage: scripts/ci [lint|format|test|fix|all]" >&2; exit 2 ;;
+esac
+echo "==> OK"

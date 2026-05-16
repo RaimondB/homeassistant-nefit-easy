@@ -63,7 +63,7 @@ class NefitXMPP(slixmpp.ClientXMPP):
     def set_message_callback(self, cb: Callable[[str], None]) -> None:
         self._message_cb = cb
 
-    async def async_connect(self, timeout: float = 30.0) -> None:
+    async def async_connect(self, timeout: float = 30.0) -> None:  # noqa: ASYNC109
         """Connect and wait until the XMPP session is live."""
         self._connected_evt.clear()
         self.connect((self._host, self._port), use_ssl=False)

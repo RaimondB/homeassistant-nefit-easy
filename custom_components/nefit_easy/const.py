@@ -9,7 +9,7 @@ DOMAIN: Final = "nefit_easy"
 # --- Configuration keys ---------------------------------------------------
 CONF_SERIAL_NUMBER: Final = "serial_number"
 CONF_ACCESS_KEY: Final = "access_key"
-CONF_PASSWORD: Final = "password"
+CONF_PASSWORD: Final = "password"  # noqa: S105  # config key name, not a secret
 CONF_SCAN_INTERVAL: Final = "scan_interval"
 
 # Nefit cloud enforces a ~60s minimum poll interval. This is a hard floor.

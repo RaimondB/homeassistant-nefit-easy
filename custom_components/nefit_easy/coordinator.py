@@ -52,12 +52,12 @@ class NefitDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             data: dict[str, Any] = {}
             data["uiStatus"] = (await self.client.get(URI_UISTATUS)).get("value", {})
             data["pressure"] = (await self.client.get(URI_PRESSURE)).get("value")
-            data["supplyTemperature"] = (
-                await self.client.get(URI_SUPPLY_TEMP)
-            ).get("value")
-            data["outdoorTemperature"] = (
-                await self.client.get(URI_OUTDOOR_TEMP)
-            ).get("value")
+            data["supplyTemperature"] = (await self.client.get(URI_SUPPLY_TEMP)).get(
+                "value"
+            )
+            data["outdoorTemperature"] = (await self.client.get(URI_OUTDOOR_TEMP)).get(
+                "value"
+            )
         except NefitAuthError as err:
             raise ConfigEntryAuthFailed(str(err)) from err
         except NefitError as err:
