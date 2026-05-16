@@ -19,11 +19,7 @@ from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import (
-    DOMAIN,
-    URI_TEMP_ROOM_MANUAL,
-    URI_USERMODE,
-)
+from .const import DOMAIN, URI_USERMODE
 from .coordinator import NefitDataUpdateCoordinator
 from .entity import NefitEntity
 
@@ -94,7 +90,7 @@ class NefitClimate(NefitEntity, ClimateEntity):
     async def async_set_temperature(self, **kwargs: Any) -> None:
         if (temp := kwargs.get(ATTR_TEMPERATURE)) is None:
             return
-        await self.coordinator.client.put(URI_TEMP_ROOM_MANUAL, {"value": float(temp)})
+        await self.coordinator.client.set_temperature(float(temp))
         await self.coordinator.async_request_refresh()
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:

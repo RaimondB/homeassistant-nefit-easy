@@ -79,12 +79,17 @@ def _load_creds() -> tuple[str, str, str]:
         )
 
 
-async def _run(endpoints: list[str], timeout: float) -> int:  # noqa: ASYNC109
+async def _run(
+    endpoints: list[str],
+    timeout: float,  # noqa: ASYNC109
+    set_temp: float | None,
+) -> int:
     serial, access_key, password = _load_creds()
     client = NefitClient(serial, access_key, password)
     print(f"==> Connecting (serial {serial[:3]}***, timeout {timeout}s) ...")
     try:
-        await asyncio.wait_for(client.connect(), timeout=timeout)
+        async with asyncio.timeout(timeout):
+            await client.connect()
     except NefitError as err:
         print(f"!! connect failed: {type(err).__name__}: {err}")
         return 2
@@ -103,6 +108,13 @@ async def _run(endpoints: list[str], timeout: float) -> int:  # noqa: ASYNC109
             except NefitError as err:
                 rc = 3
                 print(f"\n--- GET {uri} FAILED: {type(err).__name__}: {err}")
+        if set_temp is not None:
+            try:
+                print(f"\n--- set_temperature({set_temp}) ---")
+                print(json.dumps(await client.set_temperature(set_temp)))
+            except NefitError as err:
+                rc = 3
+                print(f"set_temperature FAILED: {type(err).__name__}: {err}")
     finally:
         await client.disconnect()
         print("\n==> Disconnected.")
@@ -116,6 +128,12 @@ def main() -> None:
         dest="endpoints",
         action="append",
         help="endpoint URI to GET (repeatable). Default: firmware, uiStatus, pressure",
+    )
+    parser.add_argument(
+        "--set-temp",
+        type=float,
+        default=None,
+        help="set the manual room setpoint (°C) — WRITES to the device",
     )
     parser.add_argument("--timeout", type=float, default=45.0)
     parser.add_argument(
@@ -131,7 +149,7 @@ def main() -> None:
         logging.getLogger("slixmpp").setLevel(logging.WARNING)
 
     endpoints = args.endpoints or [URI_FIRMWARE, URI_UISTATUS, URI_PRESSURE]
-    raise SystemExit(asyncio.run(_run(endpoints, args.timeout)))
+    raise SystemExit(asyncio.run(_run(endpoints, args.timeout, args.set_temp)))
 
 
 if __name__ == "__main__":
