@@ -22,3 +22,6 @@ jobs:
       - uses: hacs/action@main
         with:
           category: integration
+          # brands requires submitting the domain to home-assistant/brands;
+          # not required for a custom (non-default) HACS repo.
+          ignore: brands
