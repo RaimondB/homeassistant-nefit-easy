@@ -7,7 +7,7 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 
-from .api import NefitClient, NefitError
+from .api import NefitError, async_create_client
 from .const import (
     CONF_ACCESS_KEY,
     CONF_PASSWORD,
@@ -23,7 +23,8 @@ PLATFORMS: list[Platform] = [Platform.CLIMATE, Platform.SENSOR]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Nefit/Bosch Easy from a config entry."""
-    client = NefitClient(
+    client = await async_create_client(
+        hass,
         entry.data[CONF_SERIAL_NUMBER],
         entry.data[CONF_ACCESS_KEY],
         entry.data[CONF_PASSWORD],

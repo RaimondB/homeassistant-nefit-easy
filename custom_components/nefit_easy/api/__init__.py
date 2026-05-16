@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .client import NefitClient
+from .client import NefitClient, async_create_client
 from .errors import (
     NefitAuthError,
     NefitConnectionError,
@@ -16,4 +16,5 @@ __all__ = [
     "NefitConnectionError",
     "NefitError",
     "NefitTimeoutError",
+    "async_create_client",
 ]

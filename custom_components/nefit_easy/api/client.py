@@ -10,16 +10,33 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .crypto import NefitCrypto
 from .errors import NefitAuthError, NefitConnectionError, NefitTimeoutError
 from .xmpp import NefitXMPP
 
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+
 _LOGGER = logging.getLogger(__name__)
 
 _REQUEST_TIMEOUT = 30.0
 _USER_AGENT = "NefitEasy"
+
+
+async def async_create_client(
+    hass: HomeAssistant, serial_number: str, access_key: str, password: str
+) -> NefitClient:
+    """Build a NefitClient off the event loop.
+
+    slixmpp's ClientXMPP.__init__ creates an ssl.SSLContext, which does
+    blocking disk I/O (load_default_certs / set_default_verify_paths).
+    Constructing in an executor keeps that off the HA event loop.
+    """
+    return await hass.async_add_executor_job(
+        NefitClient, serial_number, access_key, password
+    )
 
 
 class NefitClient:
