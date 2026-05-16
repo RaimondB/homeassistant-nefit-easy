@@ -37,6 +37,20 @@ from homeassistant.components.recorder.statistics import (
 from homeassistant.const import UnitOfEnergy
 from homeassistant.helpers.recorder import get_instance
 
+# mean_type was added in HA 2025.x; guard so the same code runs on
+# older HA installs (phacc pin) and produces no deprecation warning
+# on newer ones.
+try:
+    from homeassistant.components.recorder.models import (
+        StatisticMeanType,
+    )
+
+    _MEAN_NONE = StatisticMeanType.NONE
+    _MEAN_ARITHMETIC = StatisticMeanType.ARITHMETIC
+except ImportError:
+    _MEAN_NONE = None  # type: ignore[assignment]
+    _MEAN_ARITHMETIC = None  # type: ignore[assignment]
+
 from .api import NefitError
 from .const import (
     DOMAIN,
@@ -184,14 +198,17 @@ class NefitGasStatistics:
                 stats.append(StatisticData(start=start, state=daily, sum=running))
             if not stats:
                 continue
-            metadata = StatisticMetaData(
-                has_mean=False,
-                has_sum=True,
-                name=name,
-                source=DOMAIN,
-                statistic_id=statistic_id,
-                unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-            )
+            meta: StatisticMetaData = {
+                "has_mean": False,
+                "has_sum": True,
+                "name": name,
+                "source": DOMAIN,
+                "statistic_id": statistic_id,
+                "unit_of_measurement": UnitOfEnergy.KILO_WATT_HOUR,
+            }
+            if _MEAN_NONE is not None:
+                meta["mean_type"] = _MEAN_NONE  # type: ignore[typeddict-unknown-key]
+            metadata = meta
             async_add_external_statistics(self._hass, metadata, stats)
             _LOGGER.debug("Published %d rows to %s", len(stats), statistic_id)
 
@@ -205,13 +222,16 @@ class NefitGasStatistics:
             stats.append(StatisticData(start=start, mean=row["outdoor_temp"]))
         if not stats:
             return
-        metadata = StatisticMetaData(
-            has_mean=True,
-            has_sum=False,
-            name="Nefit gas — outdoor temperature",
-            source=DOMAIN,
-            statistic_id=STAT_ID_OUTDOOR,
-            unit_of_measurement="°C",
-        )
+        meta_out: StatisticMetaData = {
+            "has_mean": True,
+            "has_sum": False,
+            "name": "Nefit gas — outdoor temperature",
+            "source": DOMAIN,
+            "statistic_id": STAT_ID_OUTDOOR,
+            "unit_of_measurement": "°C",
+        }
+        if _MEAN_ARITHMETIC is not None:
+            meta_out["mean_type"] = _MEAN_ARITHMETIC  # type: ignore[typeddict-unknown-key]
+        metadata = meta_out
         async_add_external_statistics(self._hass, metadata, stats)
         _LOGGER.debug("Published %d rows to %s", len(stats), STAT_ID_OUTDOOR)
