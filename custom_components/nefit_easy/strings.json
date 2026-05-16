@@ -54,6 +54,34 @@
           "hot_water": "Hot water"
         }
       }
+    },
+    "binary_sensor": {
+      "holiday_mode": {
+        "name": "Holiday mode"
+      },
+      "powersave_mode": {
+        "name": "Powersave mode"
+      },
+      "hot_water_active": {
+        "name": "Hot water active"
+      },
+      "boiler_block": {
+        "name": "Boiler block"
+      },
+      "boiler_lock": {
+        "name": "Boiler lock"
+      },
+      "boiler_maintenance": {
+        "name": "Boiler maintenance"
+      }
+    },
+    "switch": {
+      "hot_water_supply": {
+        "name": "Hot water supply"
+      },
+      "fireplace_mode": {
+        "name": "Fireplace mode"
+      }
     }
   }
 }
