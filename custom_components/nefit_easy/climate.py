@@ -12,8 +12,9 @@ Two independent device concepts, kept separate:
   separately by the ``boiler_indicator`` enum sensor.
 
 Raw ``uiStatus`` field codes used: IHT (in-house temp), TSP (temp
-setpoint), UMD (user mode), BAI (boiler indicator), HMD (holiday),
-FPA (fireplace).
+setpoint), UMD (user mode), BAI (boiler indicator), FPA (fireplace
+preset, settable). Holiday (HMD) is read-only and lives on
+binary_sensor.holiday_mode, not as a climate preset.
 """
 
 from __future__ import annotations
@@ -35,8 +36,9 @@ from .const import DOMAIN, URI_USERMODE
 from .coordinator import NefitDataUpdateCoordinator
 from .entity import NefitEntity
 
+# Only settable presets are listed. Holiday is read-only on this API
+# and is exposed via binary_sensor.holiday_mode instead.
 PRESET_FIREPLACE = "fireplace"
-PRESET_HOLIDAY = "holiday"
 PRESET_NONE = "none"
 
 # BAI is read-only. HVACAction has no "hot water" member, so HW and the
@@ -64,7 +66,7 @@ class NefitClimate(NefitEntity, ClimateEntity):
     _attr_name = None
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_hvac_modes = [HVACMode.HEAT, HVACMode.AUTO]
-    _attr_preset_modes = [PRESET_NONE, PRESET_FIREPLACE, PRESET_HOLIDAY]
+    _attr_preset_modes = [PRESET_NONE, PRESET_FIREPLACE]
     _attr_supported_features = (
         ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.PRESET_MODE
     )
@@ -100,11 +102,17 @@ class NefitClimate(NefitEntity, ClimateEntity):
 
     @property
     def preset_mode(self) -> str:
-        if self._status.get("HMD") == "on":
-            return PRESET_HOLIDAY
+        # Must be one of _attr_preset_modes. Holiday is read-only and
+        # surfaced via binary_sensor.holiday_mode, not here.
         if self._status.get("FPA") == "on":
             return PRESET_FIREPLACE
         return PRESET_NONE
+
+    async def async_set_preset_mode(self, preset_mode: str) -> None:
+        await self.coordinator.client.set_fireplace_mode(
+            preset_mode == PRESET_FIREPLACE
+        )
+        await self.coordinator.async_request_refresh()
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         if (temp := kwargs.get(ATTR_TEMPERATURE)) is None:
