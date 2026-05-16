@@ -31,7 +31,7 @@ class NefitSensorDescription(SensorEntityDescription):
 
 # Read-only boiler operation indicator (BAI). Unknown/missing -> None
 # (entity shows "unknown") rather than an out-of-options value.
-_BAI_MAP = {"No": "off", "CH": "central heating", "HW": "hot water"}
+_BAI_MAP = {"No": "off", "CH": "central_heating", "HW": "hot_water"}
 
 
 SENSORS: tuple[NefitSensorDescription, ...] = (
@@ -71,7 +71,7 @@ SENSORS: tuple[NefitSensorDescription, ...] = (
         key="boiler_indicator",
         translation_key="boiler_indicator",
         device_class=SensorDeviceClass.ENUM,
-        options=["off", "central heating", "hot water"],
+        options=["off", "central_heating", "hot_water"],
         value_fn=lambda d: _BAI_MAP.get(d.get("uiStatus", {}).get("BAI")),
     ),
 )

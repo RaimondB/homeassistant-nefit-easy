@@ -20,8 +20,8 @@ def _desc(key: str):
 @pytest.mark.parametrize(
     ("bai", "expected"),
     [
-        ("CH", "central heating"),
-        ("HW", "hot water"),
+        ("CH", "central_heating"),
+        ("HW", "hot_water"),
         ("No", "off"),
         ("???", None),
         (None, None),
@@ -38,7 +38,7 @@ def test_boiler_indicator_value(bai, expected) -> None:
 def test_boiler_indicator_is_enum() -> None:
     desc = _desc("boiler_indicator")
     assert desc.device_class is SensorDeviceClass.ENUM
-    assert desc.options == ["off", "central heating", "hot water"]
+    assert desc.options == ["off", "central_heating", "hot_water"]
     assert desc.native_unit_of_measurement is None
     assert desc.state_class is None
 
@@ -50,6 +50,6 @@ def test_translation_files_identical_and_have_boiler_indicator() -> None:
     assert "boiler_indicator" in strings["entity"]["sensor"]
     assert set(strings["entity"]["sensor"]["boiler_indicator"]["state"]) == {
         "off",
-        "central heating",
-        "hot water",
+        "central_heating",
+        "hot_water",
     }

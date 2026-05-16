@@ -50,8 +50,8 @@
         "name": "Boiler indicator",
         "state": {
           "off": "Off",
-          "central heating": "Central heating",
-          "hot water": "Hot water"
+          "central_heating": "Central heating",
+          "hot_water": "Hot water"
         }
       }
     }
