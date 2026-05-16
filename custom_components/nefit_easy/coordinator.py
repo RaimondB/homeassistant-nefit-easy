@@ -19,6 +19,8 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .api import NefitAuthError, NefitClient, NefitError
 from .const import (
     DOMAIN,
+    URI_CAUSECODE,
+    URI_DISPLAYCODE,
     URI_OUTDOOR_TEMP,
     URI_PRESSURE,
     URI_SUPPLY_TEMP,
@@ -61,6 +63,8 @@ class NefitDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             data["hotWaterSupply"] = await self.client.get_hot_water_supply(
                 data["uiStatus"].get("UMD")
             )
+            data["displayCode"] = (await self.client.get(URI_DISPLAYCODE)).get("value")
+            data["causeCode"] = (await self.client.get(URI_CAUSECODE)).get("value")
         except NefitAuthError as err:
             raise ConfigEntryAuthFailed(str(err)) from err
         except NefitError as err:

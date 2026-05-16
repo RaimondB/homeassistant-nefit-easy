@@ -17,6 +17,7 @@ from homeassistant.const import UnitOfPressure, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .boiler_codes import describe
 from .const import DOMAIN
 from .coordinator import NefitDataUpdateCoordinator
 from .entity import NefitEntity
@@ -27,6 +28,7 @@ class NefitSensorDescription(SensorEntityDescription):
     """Sensor description with a value extractor over coordinator data."""
 
     value_fn: Callable[[dict[str, Any]], Any]
+    attrs_fn: Callable[[dict[str, Any]], dict[str, Any]] | None = None
 
 
 # Read-only boiler operation indicator (BAI). Unknown/missing -> None
@@ -74,6 +76,15 @@ SENSORS: tuple[NefitSensorDescription, ...] = (
         options=["off", "central_heating", "hot_water"],
         value_fn=lambda d: _BAI_MAP.get(d.get("uiStatus", {}).get("BAI")),
     ),
+    NefitSensorDescription(
+        key="boiler_status",
+        translation_key="boiler_status",
+        value_fn=lambda d: describe(d.get("displayCode")),
+        attrs_fn=lambda d: {
+            "display_code": d.get("displayCode"),
+            "cause_code": d.get("causeCode"),
+        },
+    ),
 )
 
 
@@ -103,3 +114,9 @@ class NefitSensor(NefitEntity, SensorEntity):
     @property
     def native_value(self) -> Any:
         return self.entity_description.value_fn(self.coordinator.data or {})
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        if self.entity_description.attrs_fn is None:
+            return None
+        return self.entity_description.attrs_fn(self.coordinator.data or {})

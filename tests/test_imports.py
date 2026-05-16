@@ -21,6 +21,7 @@ MODULES = [
     "custom_components.nefit_easy.binary_sensor",
     "custom_components.nefit_easy.switch",
     "custom_components.nefit_easy.diagnostics",
+    "custom_components.nefit_easy.boiler_codes",
     "custom_components.nefit_easy.api",
     "custom_components.nefit_easy.api.client",
     "custom_components.nefit_easy.api.xmpp",
