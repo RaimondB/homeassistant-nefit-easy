@@ -7,6 +7,6 @@
   "integration_type": "device",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/RaimondB/homeassistant-nefit-easy/issues",
-  "requirements": ["slixmpp==1.8.5", "cryptography>=41.0.0"],
+  "requirements": ["slixmpp==1.15.0", "cryptography>=41.0.0"],
   "version": "0.1.0"
 }
