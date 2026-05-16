@@ -43,10 +43,16 @@ class NefitXMPP(slixmpp.ClientXMPP):
         *,
         host: str = DEFAULT_HOST,
         port: int = DEFAULT_PORT,
+        loop: asyncio.AbstractEventLoop | None = None,
     ) -> None:
         self._from = f"{RRC_CONTACT_PREFIX}{serial_number}@{host}"
         self._to = f"{RRC_GATEWAY_PREFIX}{serial_number}@{host}"
-        super().__init__(self._from, ACCESSKEY_PREFIX + access_key)
+        # Inject Home Assistant's event loop explicitly. slixmpp binds to
+        # the loop at construction time; since the client is built in an
+        # executor thread (its __init__ does blocking SSL cert I/O), we
+        # must pass HA's running loop in or slixmpp binds to a dead
+        # worker-thread loop and connect() never runs.
+        super().__init__(self._from, ACCESSKEY_PREFIX + access_key, loop=loop)
 
         self._host = host
         self._port = port
