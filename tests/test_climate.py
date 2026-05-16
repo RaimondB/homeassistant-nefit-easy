@@ -69,3 +69,30 @@ async def test_set_temperature_flip_observed_via_refresh(hass) -> None:
     # The device auto-flips; simulate the coordinator refresh result.
     entity.coordinator.data = {"uiStatus": {"UMD": "manual"}}
     assert entity.hvac_mode is HVACMode.HEAT
+
+
+async def test_preset_modes_are_settable_only(hass) -> None:
+    entity = _climate(hass, {})
+    assert entity.preset_modes == ["none", "fireplace"]
+    assert "holiday" not in entity.preset_modes
+
+
+@pytest.mark.parametrize(
+    ("fpa", "expected"),
+    [("on", "fireplace"), ("off", "none"), (None, "none")],
+)
+async def test_preset_mode_value(hass, fpa, expected) -> None:
+    ui = {} if fpa is None else {"FPA": fpa}
+    assert _climate(hass, ui).preset_mode == expected
+
+
+@pytest.mark.parametrize(
+    ("preset", "expected_on"),
+    [("fireplace", True), ("none", False)],
+)
+async def test_set_preset_mode(hass, preset, expected_on) -> None:
+    client = AsyncMock()
+    entity = _climate(hass, {}, client=client)
+    await entity.async_set_preset_mode(preset)
+    client.set_fireplace_mode.assert_awaited_once_with(expected_on)
+    entity.coordinator.async_request_refresh.assert_awaited_once()

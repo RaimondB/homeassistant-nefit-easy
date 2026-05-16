@@ -42,9 +42,28 @@ def describe(display_code: str | None) -> str | None:
     return entry[0] if entry else display_code
 
 
-def is_fault(display_code: str | None) -> bool | None:
-    """True=fault, False=ok, None=unknown/missing code."""
-    if not display_code:
-        return None
-    entry = _CODES.get(display_code)
-    return entry[1] if entry else None
+def _has_cause(cause_code: object) -> bool:
+    """A non-zero/non-empty cause code indicates a fault."""
+    if cause_code in (None, "", 0, "0"):
+        return False
+    return str(cause_code).strip() not in ("", "0")
+
+
+def is_fault(display_code: str | None, cause_code: object = None) -> bool | None:
+    """Whether the boiler reports a problem.
+
+    True=fault, False=ok, None=unknown. A non-zero ``cause_code`` is
+    treated as a fault regardless of the display code (the device sets
+    cause_code 0 in normal operation); known fault display codes also
+    flag. Known-OK display codes with cause_code 0 are OK.
+    """
+    if _has_cause(cause_code):
+        return True
+    entry = _CODES.get(display_code or "")
+    if entry is not None:
+        return entry[1]
+    # Unknown display code with no cause: explicit "0" cause -> OK,
+    # otherwise we genuinely don't know.
+    if cause_code in (0, "0"):
+        return False
+    return None

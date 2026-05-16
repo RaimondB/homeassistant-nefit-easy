@@ -45,3 +45,10 @@ def test_flag_mapping(key, raw, expected) -> None:
 def test_boiler_problem(display_code, expected) -> None:
     is_on = _BY_KEY["boiler_problem"].is_on_fn({"displayCode": display_code})
     assert is_on is expected
+
+
+def test_boiler_problem_uses_cause_code() -> None:
+    fn = _BY_KEY["boiler_problem"].is_on_fn
+    assert fn({"displayCode": "0H", "causeCode": 0}) is False
+    assert fn({"displayCode": "0H", "causeCode": 204}) is True
+    assert fn({"displayCode": "ZZ", "causeCode": 7}) is True

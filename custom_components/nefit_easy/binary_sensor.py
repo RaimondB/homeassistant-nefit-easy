@@ -75,7 +75,7 @@ BINARY_SENSORS: tuple[NefitBinaryDescription, ...] = (
         key="boiler_problem",
         translation_key="boiler_problem",
         device_class=BinarySensorDeviceClass.PROBLEM,
-        is_on_fn=lambda d: is_fault(d.get("displayCode")),
+        is_on_fn=lambda d: is_fault(d.get("displayCode"), d.get("causeCode")),
     ),
 )
 

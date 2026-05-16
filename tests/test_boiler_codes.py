@@ -26,6 +26,22 @@ def test_describe_and_is_fault(code, msg, fault) -> None:
     assert is_fault(code) is fault
 
 
+@pytest.mark.parametrize(
+    ("dc", "cc", "expected"),
+    [
+        ("0H", 0, False),  # normal standby, no cause
+        ("0H", "0", False),
+        ("0H", 204, True),  # any non-zero cause -> fault
+        ("ZZ", 12, True),  # unknown code + cause -> fault
+        ("ZZ", 0, False),  # unknown code, explicit no cause -> ok
+        ("ZZ", None, None),  # unknown code, no info -> unknown
+        ("2E", 0, True),  # known fault stays fault even if cause 0
+    ],
+)
+def test_is_fault_with_cause(dc, cc, expected) -> None:
+    assert is_fault(dc, cc) is expected
+
+
 def test_boiler_status_sensor_value_and_attrs() -> None:
     desc = next(d for d in SENSORS if d.key == "boiler_status")
     data = {"displayCode": "2E", "causeCode": 204}
