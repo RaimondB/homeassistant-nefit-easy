@@ -66,6 +66,16 @@ class NefitXMPP(slixmpp.ClientXMPP):
         # Bosch only offers SCRAM-SHA-1; never fall back to PLAIN.
         self["feature_mechanisms"].unencrypted_plain = False
 
+        # The Bosch backend speaks plaintext XMPP then upgrades via
+        # STARTTLS on port 5222. slixmpp 1.15 tries *direct* TLS first by
+        # default; against this server that handshake fails immediately
+        # with WRONG_VERSION_NUMBER / RECORD_LAYER_FAILURE (it received
+        # the plaintext stream header). Our connection_failed handler
+        # treats that first failure as fatal, so slixmpp never reaches
+        # its STARTTLS fallback. Force STARTTLS-only.
+        self.enable_direct_tls = False
+        self.enable_starttls = True
+
         # The Bosch backend presents a certificate that does not validate
         # against the public trust store. Every working Nefit client
         # disables verification here; the message bodies are AES-encrypted
