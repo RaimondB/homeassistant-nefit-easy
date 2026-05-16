@@ -1,0 +1,38 @@
+# Lints and runs the test suite on every PR to main, with a per-version
+# test report check. Tests are fully mocked — no live Nefit credentials in
+# CI (untrusted-PR exfiltration risk).
+
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write        # dorny/test-reporter: publish the check run
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -r requirements_test.txt
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: pytest --junitxml=test-results.xml
+      - name: Test Report-${{ matrix.python-version }}
+        uses: dorny/test-reporter@v3
+        if: success() || failure()
+        with:
+          name: Test Report-${{ matrix.python-version }}
+          path: test-results.xml
+          reporter: java-junit
