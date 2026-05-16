@@ -11,3 +11,5 @@ htmlcov/
 config/
 .HA_VERSION
 .storage/
+test-results.xml
+scripts/__pycache__/
