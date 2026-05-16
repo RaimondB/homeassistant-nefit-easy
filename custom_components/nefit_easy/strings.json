@@ -53,6 +53,9 @@
           "central_heating": "Central heating",
           "hot_water": "Hot water"
         }
+      },
+      "boiler_status": {
+        "name": "Boiler status"
       }
     },
     "binary_sensor": {
@@ -65,14 +68,8 @@
       "hot_water_active": {
         "name": "Hot water active"
       },
-      "boiler_block": {
-        "name": "Boiler block"
-      },
-      "boiler_lock": {
-        "name": "Boiler lock"
-      },
-      "boiler_maintenance": {
-        "name": "Boiler maintenance"
+      "boiler_problem": {
+        "name": "Boiler problem"
       }
     },
     "switch": {

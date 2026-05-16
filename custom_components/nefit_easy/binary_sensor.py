@@ -20,6 +20,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .boiler_codes import is_fault
 from .const import DOMAIN
 from .coordinator import NefitDataUpdateCoordinator
 from .entity import NefitEntity
@@ -71,22 +72,10 @@ BINARY_SENSORS: tuple[NefitBinaryDescription, ...] = (
         is_on_fn=_flag("DHW"),
     ),
     NefitBinaryDescription(
-        key="boiler_block",
-        translation_key="boiler_block",
+        key="boiler_problem",
+        translation_key="boiler_problem",
         device_class=BinarySensorDeviceClass.PROBLEM,
-        is_on_fn=_flag("BBE"),
-    ),
-    NefitBinaryDescription(
-        key="boiler_lock",
-        translation_key="boiler_lock",
-        device_class=BinarySensorDeviceClass.PROBLEM,
-        is_on_fn=_flag("BLE"),
-    ),
-    NefitBinaryDescription(
-        key="boiler_maintenance",
-        translation_key="boiler_maintenance",
-        device_class=BinarySensorDeviceClass.PROBLEM,
-        is_on_fn=_flag("BMR"),
+        is_on_fn=lambda d: is_fault(d.get("displayCode")),
     ),
 )
 

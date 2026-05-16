@@ -25,6 +25,9 @@ def mock_client() -> AsyncMock:
         "/heatingCircuits/hc1/actualSupplyTemperature": {"value": 45.0},
         "/system/sensors/temperatures/outdoor_t1": {"value": 8.0},
         "/gateway/versionFirmware": {"value": "1.2.3"},
+        "/system/appliance/displaycode": {"value": "-H"},
+        "/system/appliance/causecode": {"value": 200},
     }[uri]
     client.put.return_value = {"status": "ok"}
+    client.get_hot_water_supply.return_value = "on"
     return client
