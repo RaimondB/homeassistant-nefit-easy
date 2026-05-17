@@ -1,6 +1,6 @@
 [project]
 name = "homeassistant-nefit-easy"
-version = "0.1.0"
+version = "0.2.0"
 description = "Native Home Assistant custom integration for Nefit/Bosch Easy thermostats"
 readme = "README.md"
 license = { text = "MIT" }
