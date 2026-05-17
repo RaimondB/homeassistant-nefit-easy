@@ -22,7 +22,7 @@ dependency.
 - **Binary sensors**: holiday, powersave, boiler block/lock/maintenance,
   hot-water active.
 - **Switches**: hot-water supply, fireplace mode.
-- **Phase 3 (opt-in)**: daily gas-usage history into the Energy dashboard.
+- **Gas Usage History**: daily gas-usage history into the Energy dashboard.
 
 ## Installation (HACS)
 
@@ -73,6 +73,50 @@ the CH/HW split) under **Settings → Energy → Gas consumption** yourself.
 This is primarily useful if you do **not** have a smart gas meter — it
 is not a meter replacement, but the boiler's CH-vs-HW split is an
 insight a whole-house meter cannot provide.
+
+### Units: kWh vs m³
+
+The boiler reports gas in **kWh** and that is what is published. The
+Home Assistant Energy dashboard accepts kWh gas sources directly (no m³
+required), so `nefit_easy:gas_total` works there as-is. There is
+intentionally **no m³ variant**: the boiler exposes no volume figure,
+and converting would need a fixed calorific value that varies by region
+and over time — a lossy approximation on top of the boiler's own
+estimate.
+
+If your gas is billed per m³ and you only want **cost**, you do not
+need m³ at all — set the price per kWh in the Energy dashboard:
+
+```text
+price_per_kWh = price_per_m³ / calorific_value
+# NL G-gas ≈ 9.769 kWh/m³, e.g. €1.45/m³ → €0.1484/kWh
+```
+
+If you genuinely need an **m³ figure** (e.g. to reconcile with the
+meter), convert with a template sensor using your local calorific
+value. Note external statistics have no entity, so this derives from a
+kWh sensor *you* expose (or any kWh gas entity); it is approximate:
+
+```yaml
+# configuration.yaml
+template:
+  - sensor:
+      - name: Nefit gas total m3
+        unique_id: nefit_gas_total_m3
+        unit_of_measurement: "m³"
+        device_class: gas
+        state_class: total_increasing
+        # 9.769 = NL G-gas calorific value (kWh per m³) — adjust to
+        # your region / energy bill.
+        state: "{{ (states('sensor.nefit_gas_total_kwh') | float(0) / 9.769) | round(3) }}"
+        availability: "{{ states('sensor.nefit_gas_total_kwh') not in ['unknown','unavailable'] }}"
+```
+
+That m³ template sensor can then be selected under
+**Settings → Energy → Gas consumption** like any other gas entity. (For
+a *rate* such as m³/h rather than a converted total, use the
+[`derivative`](https://www.home-assistant.io/integrations/derivative/)
+helper on the m³ sensor.)
 
 ## Notes
 
