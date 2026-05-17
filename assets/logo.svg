@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 320" width="980" height="320">
+  <title>Nefit/Bosch Easy</title>
+  <defs>
+    <radialGradient id="dial" cx="50%" cy="38%" r="72%">
+      <stop offset="0%" stop-color="#2a2f39"/>
+      <stop offset="55%" stop-color="#161922"/>
+      <stop offset="100%" stop-color="#0b0d12"/>
+    </radialGradient>
+    <linearGradient id="ring" x1="15%" y1="90%" x2="85%" y2="12%">
+      <stop offset="0%"  stop-color="#2d6cff"/>
+      <stop offset="38%" stop-color="#39a0ff"/>
+      <stop offset="60%" stop-color="#8a7bd8"/>
+      <stop offset="80%" stop-color="#ff6a3d"/>
+      <stop offset="100%" stop-color="#ff4d2e"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="4" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Dial mark -->
+  <g transform="translate(160 160)">
+    <circle cx="0" cy="0" r="148" fill="url(#dial)"/>
+    <circle cx="0" cy="0" r="148" fill="none" stroke="#000000"
+            stroke-opacity="0.45" stroke-width="3"/>
+    <path d="M 0 -132 A 132 132 0 1 1 -74 109"
+          fill="none" stroke="url(#ring)" stroke-width="11"
+          stroke-linecap="round" filter="url(#glow)"/>
+    <path d="M -15 -74 L 0 -88 L 15 -74" fill="none" stroke="#c7ccd6"
+          stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M -15 74 L 0 88 L 15 74" fill="none" stroke="#c7ccd6"
+          stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="0" y="34" text-anchor="middle"
+          font-family="DejaVu Sans, Helvetica, Arial, sans-serif"
+          font-size="86" font-weight="bold" fill="#ffffff">20,3</text>
+  </g>
+
+  <!-- Wordmark (dark — readable on the light HACS/store cards) -->
+  <text x="360" y="178" font-family="DejaVu Sans, Helvetica, Arial, sans-serif"
+        font-size="120" font-weight="bold" fill="#1b2027">Nefit</text>
+  <text x="360" y="266" font-family="DejaVu Sans, Helvetica, Arial, sans-serif"
+        font-size="78" font-weight="bold" fill="#5b6472"
+        letter-spacing="2">Bosch Easy</text>
+</svg>
