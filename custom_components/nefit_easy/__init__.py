@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -23,6 +25,8 @@ from .const import (
 )
 from .coordinator import NefitDataUpdateCoordinator
 from .gas_statistics import NefitGasStatistics
+
+_LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
@@ -53,15 +57,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_reload))
 
-    if entry.options.get(CONF_IMPORT_GAS_HISTORY, DEFAULT_IMPORT_GAS_HISTORY):
-        # Attach to the coordinator so the hass.data[DOMAIN] shape (read
-        # by all platforms) stays untouched.
-        gas = NefitGasStatistics(hass, entry, client)
-        coordinator.gas_statistics = gas
+    # Always attach the helper so the import_gas_history service works
+    # on demand even when the auto-import option is off (the option only
+    # controls the daily refresh + one-time backfill). Attached to the
+    # coordinator so the hass.data[DOMAIN] shape stays untouched.
+    gas = NefitGasStatistics(hass, entry, client)
+    coordinator.gas_statistics = gas
+
+    gas_enabled = entry.options.get(CONF_IMPORT_GAS_HISTORY, DEFAULT_IMPORT_GAS_HISTORY)
+    _LOGGER.debug(
+        "Gas-usage import option %s for entry %s",
+        "enabled" if gas_enabled else "disabled",
+        entry.entry_id,
+    )
+    if gas_enabled:
         entry.async_on_unload(
             async_track_time_interval(hass, gas.async_daily, GAS_DAILY_INTERVAL)
         )
         # One-time, resumable full backfill; idempotent on restart/reload.
+        _LOGGER.debug("Scheduling gas-usage backfill task")
         entry.async_create_background_task(
             hass, gas.async_backfill(), "nefit_easy gas backfill"
         )
@@ -76,10 +90,22 @@ def _async_register_services(hass: HomeAssistant) -> None:
         return
 
     async def _import_gas_history(_call: ServiceCall) -> None:
-        for coordinator in hass.data.get(DOMAIN, {}).values():
+        coordinators = list(hass.data.get(DOMAIN, {}).values())
+        _LOGGER.debug(
+            "import_gas_history service called; %d coordinator(s)",
+            len(coordinators),
+        )
+        ran = 0
+        for coordinator in coordinators:
             gas = getattr(coordinator, "gas_statistics", None)
             if gas is not None:
                 await gas.async_backfill()
+                ran += 1
+        if ran == 0:
+            _LOGGER.warning(
+                "import_gas_history: no gas-statistics helper found "
+                "(integration not loaded?)"
+            )
 
     hass.services.async_register(
         DOMAIN, SERVICE_IMPORT_GAS_HISTORY, _import_gas_history

@@ -25,7 +25,7 @@
         "title": "Options",
         "data": {
           "scan_interval": "Poll interval (seconds, minimum 60)",
-          "import_gas_history": "Import gas-usage history into long-term statistics"
+          "import_gas_history": "Automatically import gas-usage history (back-fill once, then refresh daily)"
         }
       }
     },
@@ -36,7 +36,7 @@
   "services": {
     "import_gas_history": {
       "name": "Import gas-usage history",
-      "description": "Fetch the full daily gas-usage history from the boiler and import it into Home Assistant long-term statistics. Paced to respect the Nefit cloud rate limit; safe to run repeatedly (idempotent)."
+      "description": "Fetch the full daily gas-usage history from the boiler and import it into Home Assistant long-term statistics. Works regardless of the \"Import gas-usage history\" option (that option only controls the automatic daily refresh). Paced to respect the Nefit cloud rate limit; safe to run repeatedly (idempotent)."
     }
   },
   "entity": {
