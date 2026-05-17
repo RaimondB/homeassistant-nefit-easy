@@ -111,12 +111,17 @@ class NefitGasStatistics:
         cancelled/stopping hass) are logged and swallowed; the next run
         resumes idempotently.
         """
+        _LOGGER.debug("Gas-usage import started (full=%s)", full)
         async with self._lock:
             try:
                 days = await self._collect(full=full)
             except NefitError as err:
                 _LOGGER.warning("Gas-usage import aborted: %s", err)
                 return
+            except Exception:
+                _LOGGER.exception("Gas-usage import unexpected error")
+                return
+            _LOGGER.debug("Gas-usage import collected %d days", len(days))
             if not days:
                 _LOGGER.debug("Gas-usage import: no rows collected")
                 return
@@ -124,18 +129,26 @@ class NefitGasStatistics:
             # day across the boundary page on incremental runs.
             by_start = {_bucket(d["date"]): d for d in days}
             ordered = [by_start[s] for s in sorted(by_start)]
+            _LOGGER.debug(
+                "Gas-usage import: date range %s to %s",
+                ordered[0]["date"],
+                ordered[-1]["date"],
+            )
             await self._publish_energy(ordered)
             await self._publish_outdoor(ordered)
+            _LOGGER.debug("Gas-usage import finished")
 
     # -- collection ------------------------------------------------------
     async def _collect(self, *, full: bool) -> list[dict[str, Any]]:
         pointer = await self._client.gas_usage_pointer()
+        _LOGGER.debug("Gas-usage pointer: %d records", pointer)
         if pointer <= 0:
             return []
         # Pages are 1-indexed (page=0 is rejected with HTTP 400).
         pages = math.ceil(pointer / GAS_PAGE_SIZE)
         # Incremental: only the newest (last) page; full: every page.
         page_range = range(1, pages + 1) if full else range(pages, pages + 1)
+        _LOGGER.debug("Gas-usage collecting pages %s (full=%s)", list(page_range), full)
         rows: list[dict[str, Any]] = []
         for i, page in enumerate(page_range):
             if self._hass.is_stopping:
@@ -143,7 +156,9 @@ class NefitGasStatistics:
                 break
             if i:
                 await asyncio.sleep(GAS_PAGE_DELAY_SECONDS)
-            rows.extend(await self._client.gas_usage(page))
+            page_rows = await self._client.gas_usage(page)
+            _LOGGER.debug("Gas-usage page %d: %d rows", page, len(page_rows))
+            rows.extend(page_rows)
         return rows
 
     # -- recorder reads (executor) --------------------------------------
@@ -188,6 +203,12 @@ class NefitGasStatistics:
 
         for statistic_id, name in _ENERGY_STATS.items():
             last_start, running = await self._last_sum(statistic_id)
+            _LOGGER.debug(
+                "%s: resume from last_start=%s running_sum=%.3f",
+                statistic_id,
+                last_start,
+                running,
+            )
             stats: list[StatisticData] = []
             for row in ordered:
                 start = _bucket(row["date"])
@@ -197,6 +218,7 @@ class NefitGasStatistics:
                 running += daily
                 stats.append(StatisticData(start=start, state=daily, sum=running))
             if not stats:
+                _LOGGER.debug("%s: no new rows to publish", statistic_id)
                 continue
             meta: StatisticMetaData = {
                 "has_mean": False,
