@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>Nefit/Bosch Easy</title>
+  <defs>
+    <!-- Dark dial body, subtle top-lit sphere look -->
+    <radialGradient id="dial" cx="50%" cy="38%" r="72%">
+      <stop offset="0%" stop-color="#2a2f39"/>
+      <stop offset="55%" stop-color="#161922"/>
+      <stop offset="100%" stop-color="#0b0d12"/>
+    </radialGradient>
+    <!-- Cool->warm accent sweep (blue lower-left, red upper-right) -->
+    <linearGradient id="ring" x1="15%" y1="90%" x2="85%" y2="12%">
+      <stop offset="0%"  stop-color="#2d6cff"/>
+      <stop offset="38%" stop-color="#39a0ff"/>
+      <stop offset="60%" stop-color="#8a7bd8"/>
+      <stop offset="80%" stop-color="#ff6a3d"/>
+      <stop offset="100%" stop-color="#ff4d2e"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="6" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Dial body -->
+  <circle cx="256" cy="256" r="236" fill="url(#dial)"/>
+  <circle cx="256" cy="256" r="236" fill="none" stroke="#000000" stroke-opacity="0.45" stroke-width="4"/>
+
+  <!-- Accent ring: open arc, gap at the bottom like the device -->
+  <path d="M 256 44 A 212 212 0 1 1 138 430"
+        fill="none" stroke="url(#ring)" stroke-width="16"
+        stroke-linecap="round" filter="url(#glow)"/>
+
+  <!-- Up / down chevrons -->
+  <path d="M 232 120 L 256 98 L 280 120" fill="none" stroke="#c7ccd6"
+        stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M 232 392 L 256 414 L 280 392" fill="none" stroke="#c7ccd6"
+        stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Temperature readout (comma decimal, like the display) -->
+  <text x="256" y="298" text-anchor="middle"
+        font-family="DejaVu Sans, Helvetica, Arial, sans-serif"
+        font-size="132" font-weight="bold" fill="#ffffff">20,3</text>
+</svg>

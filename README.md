@@ -9,8 +9,7 @@ thermostats. This is a from-scratch Python rewrite of the functionality in
 encryption) is reimplemented in-repo; there is no third-party protocol
 dependency.
 
-> Status: **early development.** Phase 1 (climate + core sensors) is the MVP.
-> Gas-usage history / Energy dashboard support is a later, opt-in phase.
+> Status: **first release.** Supports most sensors and controls and allows for importing Gas-usage history in the Energy dashboard.
 
 ## Features (target)
 
@@ -158,5 +157,6 @@ For protocol-level debugging without Home Assistant, use the
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Protocol originally reverse-engineered by
-Robert Klep; Node-RED implementation by Raimond Brookman.
+MIT — see [LICENSE](LICENSE). 
+Protocol originally reverse-engineered by
+Robert Klep; [Node-RED implementation](https://github.com/RaimondB/node-red-contrib-nefit-easy) by Raimond Brookman as an improvement to the early work done by PepijnG.
