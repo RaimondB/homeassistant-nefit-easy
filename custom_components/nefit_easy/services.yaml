@@ -2,5 +2,8 @@ import_gas_history:
   name: Import gas-usage history
   description: >-
     Fetch the full daily gas-usage history from the boiler and import it
-    into Home Assistant long-term statistics. Paced to respect the Nefit
-    cloud rate limit; safe to run repeatedly (idempotent).
+    into Home Assistant long-term statistics. Works regardless of the
+    "Import gas-usage history" option (that option only controls the
+    automatic daily refresh). Paced to respect the Nefit cloud rate
+    limit; safe to run repeatedly (idempotent, already-imported days are
+    skipped).

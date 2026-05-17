@@ -36,19 +36,36 @@ dependency.
 
 ## Gas-usage statistics (optional)
 
-The boiler stores a daily gas-usage history. Enabling **Import gas-usage
-history** in the integration options publishes four long-term statistics:
+The boiler stores a daily gas-usage history that can be published as
+four long-term statistics:
 
 - `nefit_easy:gas_central_heating` — daily CH gas (kWh)
 - `nefit_easy:gas_hot_water` — daily hot-water gas (kWh)
 - `nefit_easy:gas_total` — CH + HW (kWh)
 - `nefit_easy:gas_outdoor_temp` — daily mean outdoor temperature (°C)
 
-On first enable the full history is back-filled, paced ~5 s per page to
-respect the cloud rate limit, then refreshed daily. The
-`nefit_easy.import_gas_history` service re-runs the full import on
-demand (idempotent). Disabling the option leaves already-imported
-statistics in place.
+There are two independent ways to trigger the import:
+
+- **Option — *Import gas-usage history*** (integration *Configure*
+  dialog): when enabled, the full history is back-filled once on
+  setup/reload and then a daily incremental refresh keeps it current.
+  This is the "set and forget" path. Disabling the option stops the
+  automatic refresh but **leaves already-imported statistics in place**.
+- **Service — `nefit_easy.import_gas_history`**: runs the full back-fill
+  on demand, **regardless of whether the option is enabled**. Use it for
+  a one-off import, or to force a re-sync. It is idempotent — re-running
+  never double-counts (already-imported days are skipped).
+
+In short: the option controls the *automatic* behaviour; the service is
+an *explicit* trigger that always works. The import is paced ~5 s per
+page to respect the Nefit cloud rate limit, so a full back-fill of
+several years takes a few minutes (watch progress with the debug logger
+below).
+
+External statistics have no entity — they appear under
+**Developer Tools → Statistics** and in *Statistics graph* dashboard
+cards (using the `nefit_easy:gas_*` IDs directly), not in normal
+entity History.
 
 These statistics are **not** added to the Energy dashboard
 automatically. If you want them there, add `nefit_easy:gas_total` (or
@@ -84,6 +101,13 @@ Common cause: the **Home Assistant host cannot resolve or reach**
 `wa2-mz36-qrmzh6.bosch.de:5222` (container DNS, firewall, or network
 egress) even when another machine on the LAN can. Verify from the HA
 host/container itself.
+
+The same `custom_components.nefit_easy: debug` logger also traces the
+gas-usage import: option state at setup, pages fetched, days collected,
+the per-statistic resume point, and a warning if the
+`import_gas_history` service finds no helper. If imported statistics
+look empty, check **Developer Tools → Statistics** (not entity History)
+— external statistics have no entity.
 
 For protocol-level debugging without Home Assistant, use the
 [`scripts/probe`](scripts/probe) standalone tool in this repo.
