@@ -12,6 +12,7 @@ and crops/resizes (Pillow). Run: ``python assets/build_brands.py``.
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 
 from PIL import Image
@@ -20,10 +21,14 @@ HERE = os.path.dirname(__file__)
 OUT = os.path.join(HERE, "brands")
 ALPHA_FLOOR = 12  # ignore faint glow halo when trimming
 
+RSVG = shutil.which("rsvg-convert")
+if RSVG is None:  # pragma: no cover - build-tool guard
+    raise SystemExit("rsvg-convert not found (install librsvg2-bin)")
+
 
 def _rasterize(svg: str, px: int) -> Image.Image:
-    png = subprocess.run(  # noqa: S603, S607  # local build tool, fixed argv
-        ["rsvg-convert", "-w", str(px), "-h", str(px), svg],
+    png = subprocess.run(  # noqa: S603  # local build tool
+        [RSVG, "-w", str(px), "-h", str(px), svg],
         check=True,
         capture_output=True,
     ).stdout
@@ -58,8 +63,8 @@ def build_icon() -> None:
 
 def build_logo() -> None:
     # rsvg keeps the SVG aspect when only width is given.
-    raw = subprocess.run(  # noqa: S603, S607  # local build tool, fixed argv
-        ["rsvg-convert", "-w", "1960", os.path.join(HERE, "logo.svg")],
+    raw = subprocess.run(  # noqa: S603  # local build tool
+        [RSVG, "-w", "1960", os.path.join(HERE, "logo.svg")],
         check=True,
         capture_output=True,
     ).stdout
