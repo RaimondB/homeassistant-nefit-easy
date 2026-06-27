@@ -6,9 +6,10 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.start import async_at_started
 
 from .api import NefitError, async_create_client
 from .const import (
@@ -74,11 +75,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entry.async_on_unload(
             async_track_time_interval(hass, gas.async_daily, GAS_DAILY_INTERVAL)
         )
-        # One-time, resumable full backfill; idempotent on restart/reload.
-        _LOGGER.debug("Scheduling gas-usage backfill task")
-        entry.async_create_background_task(
-            hass, gas.async_backfill(), "nefit_easy gas backfill"
-        )
+
+        # Gas-usage import, deferred until HA has fully started so the page
+        # walk never races boot (it shares the boiler's single XMPP
+        # connection with the coordinator). ``async_startup`` imports the
+        # full history only on the first ever run; on later restarts it just
+        # fills the gap since the last imported day instead of re-walking the
+        # whole history every time. ``async_at_started`` fires after boot,
+        # and immediately on a post-start reload.
+        @callback
+        def _schedule_gas_import(_hass: HomeAssistant) -> None:
+            _LOGGER.debug("Scheduling gas-usage import task (HA started)")
+            entry.async_create_background_task(
+                hass, gas.async_startup(), "nefit_easy gas import"
+            )
+
+        entry.async_on_unload(async_at_started(hass, _schedule_gas_import))
 
     _async_register_services(hass)
     return True
