@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/RaimondB/homeassistant-nefit-easy/compare/homeassistant-nefit-easy-v0.2.0...homeassistant-nefit-easy-v0.3.0) (2026-06-27)
+
+
+### Features
+
+* **gas:** defer gas-usage import to after-start; gap-fill missed days on restart ([4574173](https://github.com/RaimondB/homeassistant-nefit-easy/commit/4574173be45d59efd144c30f035c1b914b9bc530))
+
 ## [0.2.0](https://github.com/RaimondB/homeassistant-nefit-easy/compare/homeassistant-nefit-easy-v0.1.0...homeassistant-nefit-easy-v0.2.0) (2026-05-17)
 
 
