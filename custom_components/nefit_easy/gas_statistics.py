@@ -104,7 +104,23 @@ class NefitGasStatistics:
         """Scheduled incremental import (last page only)."""
         await self.async_import(full=False)
 
-    async def async_import(self, *, full: bool) -> None:
+    async def async_startup(self, _now: Any = None) -> None:
+        """Startup import: full history only on the first ever run; otherwise
+        fill only the gap since the last imported day.
+
+        A full backfill is only needed once. On later restarts we fetch just
+        the days that were missed (covers downtime of any length) instead of
+        re-walking the entire paged history every time.
+        """
+        last = await self._last_start(STAT_ID_TOTAL)
+        if last is None:
+            _LOGGER.debug("Gas-usage startup: no prior statistics — full backfill")
+            await self.async_import(full=True)
+        else:
+            _LOGGER.debug("Gas-usage startup: gap-fill since %s", last)
+            await self.async_import(full=False, since=last)
+
+    async def async_import(self, *, full: bool, since: datetime | None = None) -> None:
         """Collect history and publish all four statistics.
 
         Never raises into a scheduler/background task: NefitError (and a
@@ -114,7 +130,7 @@ class NefitGasStatistics:
         _LOGGER.debug("Gas-usage import started (full=%s)", full)
         async with self._lock:
             try:
-                days = await self._collect(full=full)
+                days = await self._collect(full=full, since=since)
             except NefitError as err:
                 _LOGGER.warning("Gas-usage import aborted: %s", err)
                 return
@@ -139,18 +155,35 @@ class NefitGasStatistics:
             _LOGGER.debug("Gas-usage import finished")
 
     # -- collection ------------------------------------------------------
-    async def _collect(self, *, full: bool) -> list[dict[str, Any]]:
+    async def _collect(
+        self, *, full: bool, since: datetime | None = None
+    ) -> list[dict[str, Any]]:
         pointer = await self._client.gas_usage_pointer()
         _LOGGER.debug("Gas-usage pointer: %d records", pointer)
         if pointer <= 0:
             return []
-        # Pages are 1-indexed (page=0 is rejected with HTTP 400).
+        # Pages are 1-indexed (page=0 is rejected with HTTP 400); the LAST
+        # page holds the newest records.
         pages = math.ceil(pointer / GAS_PAGE_SIZE)
-        # Incremental: only the newest (last) page; full: every page.
-        page_range = range(1, pages + 1) if full else range(pages, pages + 1)
-        _LOGGER.debug("Gas-usage collecting pages %s (full=%s)", list(page_range), full)
+        if full:
+            # Whole history, oldest -> newest.
+            page_seq: list[int] = list(range(1, pages + 1))
+        elif since is not None:
+            # Gap-fill: walk newest -> oldest and stop as soon as a page
+            # reaches back to the last imported day, so a restart only
+            # fetches the days actually missed, not the full history.
+            page_seq = list(range(pages, 0, -1))
+        else:
+            # Daily incremental: newest page only.
+            page_seq = [pages]
+        _LOGGER.debug(
+            "Gas-usage collecting pages %s (full=%s, since=%s)",
+            page_seq,
+            full,
+            since,
+        )
         rows: list[dict[str, Any]] = []
-        for i, page in enumerate(page_range):
+        for i, page in enumerate(page_seq):
             if self._hass.is_stopping:
                 _LOGGER.debug("Gas-usage import interrupted (hass stopping)")
                 break
@@ -159,6 +192,16 @@ class NefitGasStatistics:
             page_rows = await self._client.gas_usage(page)
             _LOGGER.debug("Gas-usage page %d: %d rows", page, len(page_rows))
             rows.extend(page_rows)
+            # Gap-fill stop: once this page reaches the last imported day,
+            # everything older is already recorded.
+            if (
+                since is not None
+                and not full
+                and page_rows
+                and any(_bucket(r["date"]) <= since for r in page_rows)
+            ):
+                _LOGGER.debug("Gas-usage gap-fill reached %s — stopping", since)
+                break
         return rows
 
     # -- recorder reads (executor) --------------------------------------
