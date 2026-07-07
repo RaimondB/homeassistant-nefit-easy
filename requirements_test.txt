@@ -6,4 +6,4 @@
 # not an HA dependency, so it must be pinned explicitly.
 pytest-homeassistant-custom-component==0.13.205
 ruff
-slixmpp==1.15.0
+slixmpp==1.16.0
