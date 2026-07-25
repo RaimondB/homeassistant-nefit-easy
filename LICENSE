@@ -2,12 +2,6 @@ MIT License
 
 Copyright (c) 2026 Raimond Brookman
 
-This is a native Home Assistant integration that reimplements the
-Nefit/Bosch Easy cloud protocol. The protocol was originally reverse
-engineered by Robert Klep (nefit-easy-core / nefit-easy-commands) and
-the Node-RED implementation it derives from is
-node-red-contrib-nefit-easy by Raimond Brookman.
-
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights
