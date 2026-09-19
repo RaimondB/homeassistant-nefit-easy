@@ -19,6 +19,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .api import NefitAuthError, NefitClient, NefitError
 from .const import (
     DOMAIN,
+    SENSOR_SENTINEL_VALUE,
     URI_CAUSECODE,
     URI_DISPLAYCODE,
     URI_OUTDOOR_TEMP,
@@ -28,6 +29,19 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _drop_sentinel(value: Any) -> Any:
+    """Map the appliance's "no reading" marker to None.
+
+    Keeps a sensor the boiler cannot read out of the entity state (and out of
+    long-term statistics) instead of publishing the raw sentinel as a value.
+    """
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return value
+    return None if numeric == SENSOR_SENTINEL_VALUE else numeric
 
 
 class NefitDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -55,7 +69,9 @@ class NefitDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         try:
             data: dict[str, Any] = {}
             data["uiStatus"] = (await self.client.get(URI_UISTATUS)).get("value", {})
-            data["pressure"] = (await self.client.get(URI_PRESSURE)).get("value")
+            data["pressure"] = _drop_sentinel(
+                (await self.client.get(URI_PRESSURE)).get("value")
+            )
             data["supplyTemperature"] = (await self.client.get(URI_SUPPLY_TEMP)).get(
                 "value"
             )

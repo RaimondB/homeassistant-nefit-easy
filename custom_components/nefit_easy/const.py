@@ -42,6 +42,11 @@ URI_DHW_CLOCK: Final = "/dhwCircuits/dhwA/dhwOperationClockMode"
 URI_DHW_MANUAL: Final = "/dhwCircuits/dhwA/dhwOperationManualMode"
 URI_FIRMWARE: Final = "/gateway/versionFirmware"
 
+# Analogue readings the appliance cannot take come back as 0xFF/10. A boiler
+# with no digital pressure sensor answers systemPressure with this forever,
+# which would otherwise read as a real (absurd) 25.5 bar.
+SENSOR_SENTINEL_VALUE: Final = 25.5
+
 # --- Endpoints (PUT) ------------------------------------------------------
 URI_TEMP_ROOM_MANUAL: Final = "/heatingCircuits/hc1/temperatureRoomManual"
 URI_TEMP_OVERRIDE_STATUS: Final = "/heatingCircuits/hc1/manualTempOverride/status"
