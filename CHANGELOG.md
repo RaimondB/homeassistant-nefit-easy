@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1](https://github.com/RaimondB/homeassistant-nefit-easy/compare/homeassistant-nefit-easy-v0.3.0...homeassistant-nefit-easy-v0.3.1) (2026-09-22)
+
+
+### Bug Fixes
+
+* **deps:** Bump slixmpp from 1.15.0 to 1.16.0 ([#27](https://github.com/RaimondB/homeassistant-nefit-easy/issues/27)) ([fa2332d](https://github.com/RaimondB/homeassistant-nefit-easy/commit/fa2332da3dbad481afa86b53ada4cd8441aa8f2a))
+* **sensor:** drop the no-sensor pressure marker instead of reporting 25.5 bar ([0cd6d03](https://github.com/RaimondB/homeassistant-nefit-easy/commit/0cd6d033300c580bf4349ca6961cf27425b3c170))
+
 ## [0.3.0](https://github.com/RaimondB/homeassistant-nefit-easy/compare/homeassistant-nefit-easy-v0.2.0...homeassistant-nefit-easy-v0.3.0) (2026-06-27)
 
 
