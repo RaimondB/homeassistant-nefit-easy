@@ -17,6 +17,7 @@ import ssl
 from collections.abc import Callable
 
 import slixmpp
+from slixmpp.xmlstream.xmlstream import NotConnectedError
 
 from ..const import (
     ACCESSKEY_PREFIX,
@@ -62,6 +63,11 @@ class NefitXMPP(slixmpp.ClientXMPP):
         self._ready = asyncio.Event()
         self._error: Exception | None = None
         self._ping_task: asyncio.Task | None = None
+        # True from session_start until the stream drops. The client checks it
+        # before every request and reconnects when it is False: slixmpp does
+        # not reconnect by itself, and before this a dropped stream left the
+        # integration unavailable until HA restarted (2026-10-21, four days).
+        self._session_live = False
 
         # Bosch only offers SCRAM-SHA-1; never fall back to PLAIN.
         self["feature_mechanisms"].unencrypted_plain = False
@@ -132,6 +138,22 @@ class NefitXMPP(slixmpp.ClientXMPP):
             raise self._error
         _LOGGER.debug("Nefit XMPP session established")
 
+    @property
+    def session_live(self) -> bool:
+        """An XMPP session is established and its transport is still open."""
+        return self._session_live and self.is_connected()
+
+    def mark_dead(self) -> None:
+        """Treat the session as lost, so the next request reconnects."""
+        self._session_live = False
+
+    async def async_reconnect(self, timeout: float = 30.0) -> None:  # noqa: ASYNC109
+        """Drop whatever is left of the old stream and connect afresh."""
+        self._session_live = False
+        if self.is_connected():
+            self.abort()
+        await self.async_connect(timeout)
+
     async def async_disconnect(self) -> None:
         if self._ping_task:
             self._ping_task.cancel()
@@ -144,6 +166,7 @@ class NefitXMPP(slixmpp.ClientXMPP):
 
     async def _on_session_start(self, _event: object) -> None:
         _LOGGER.debug("XMPP session started; sending presence")
+        self._session_live = True
         self.send_presence()
         if self._ping_task is None:
             self._ping_task = asyncio.create_task(self._ping_loop())
@@ -183,8 +206,15 @@ class NefitXMPP(slixmpp.ClientXMPP):
                     f"Disconnected before session start: {reason}"
                 )
             self._ready.set()
-        else:
-            _LOGGER.debug("XMPP disconnected: %s", reason)
+        elif self._session_live:
+            # Not an error yet: the next request reconnects. Logged at WARNING
+            # so a flapping connection is visible in the HA log.
+            _LOGGER.warning(
+                "Lost the XMPP connection to %s (%s); reconnecting on the next request",
+                self._host,
+                reason,
+            )
+        self._session_live = False
 
     def _on_message(self, msg: slixmpp.stanza.Message) -> None:
         if self._message_cb and msg["type"] in ("chat", "normal"):
@@ -193,10 +223,17 @@ class NefitXMPP(slixmpp.ClientXMPP):
                 self._message_cb(body)
 
     async def _ping_loop(self) -> None:
+        # Keep-alive. Survives a dropped stream (skips while disconnected)
+        # instead of dying on the first NotConnectedError.
         try:
             while True:
                 await asyncio.sleep(_PING_INTERVAL)
-                self.send_presence()
+                if not self.session_live:
+                    continue
+                try:
+                    self.send_presence()
+                except NotConnectedError:
+                    self._session_live = False
         except asyncio.CancelledError:
             pass
 
@@ -221,4 +258,10 @@ class NefitXMPP(slixmpp.ClientXMPP):
             f'<message from="{self._from}" to="{self._to}">'
             f"<body>{escaped}</body></message>"
         )
-        self.send_raw(stanza)
+        try:
+            self.send_raw(stanza)
+        except NotConnectedError as err:
+            self._session_live = False
+            raise NefitConnectionError(
+                "XMPP connection to the Nefit backend is lost"
+            ) from err

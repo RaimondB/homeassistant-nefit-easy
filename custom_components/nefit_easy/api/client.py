@@ -29,6 +29,9 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 _REQUEST_TIMEOUT = 30.0
+# A session that stops answering is as dead as a dropped one. The 2026-10-21
+# outage began with "No response from Nefit gateway" before the stream closed.
+_MAX_CONSECUTIVE_TIMEOUTS = 2
 _USER_AGENT = "NefitEasy"
 
 
@@ -65,6 +68,7 @@ class NefitClient:
         self._crypto = NefitCrypto(access_key, password)
         self._lock = asyncio.Lock()
         self._response: asyncio.Future[str] | None = None
+        self._timeouts = 0
         self._xmpp.set_message_callback(self._on_body)
 
     async def connect(self) -> None:
@@ -93,8 +97,23 @@ class NefitClient:
                 headers[k.strip().lower()] = v.strip()
         return status, headers, body.strip()
 
+    async def _ensure_session(self) -> None:
+        """Reconnect when the XMPP session is gone (dropped or unresponsive).
+
+        A failed reconnect raises NefitConnectionError, so the coordinator
+        marks the poll failed and tries again on its next interval — no
+        restart of Home Assistant needed.
+        """
+        if self._xmpp.session_live:
+            return
+        _LOGGER.info("No live XMPP session; reconnecting to the Nefit backend")
+        await self._xmpp.async_reconnect()
+        self._timeouts = 0
+        _LOGGER.info("Reconnected to the Nefit backend")
+
     async def _request(self, message: str) -> str:
         async with self._lock:
+            await self._ensure_session()
             loop = asyncio.get_running_loop()
             self._response = loop.create_future()
             # Log the request line + headers only (never the encrypted
@@ -104,14 +123,22 @@ class NefitClient:
                 "--> request:\n%s",
                 head.replace("\r", "\\r").replace("\n", "\\n\n"),
             )
-            self._xmpp.send_body(message)
             try:
+                self._xmpp.send_body(message)
                 async with asyncio.timeout(_REQUEST_TIMEOUT):
                     raw = await self._response
             except TimeoutError as err:
+                self._timeouts += 1
+                if self._timeouts >= _MAX_CONSECUTIVE_TIMEOUTS:
+                    _LOGGER.warning(
+                        "%d requests in a row unanswered; reconnecting on the next one",
+                        self._timeouts,
+                    )
+                    self._xmpp.mark_dead()
                 raise NefitTimeoutError("No response from Nefit gateway") from err
             finally:
                 self._response = None
+            self._timeouts = 0
             _LOGGER.debug(
                 "<-- response (%d bytes):\n%s",
                 len(raw),
