@@ -19,14 +19,15 @@ _CODES: dict[str, tuple[str, bool]] = {
     "0E": ("System waiting", False),
     "0H": ("System standby", False),
     "rE": ("System restarting", False),
-    # 0A/0Y are waiting (operating) states, not faults: the boiler reached its flow
-    # temperature faster than the heat could be taken up (closed radiator valves, low
-    # flow) and pauses so it does not short-cycle. On a real install they came 33x
-    # in 10 days, each for 1-2 min, all with cause code 0 — and each flipped the
-    # "boiler problem" sensor on. A non-zero cause code still makes it a fault
-    # (see is_fault).
-    "0A": ("Waiting — boiler cannot transfer heat to central heating", False),
-    "0Y": ("Waiting — boiler cannot transfer heat to central heating", False),
+    # 0A/0Y are the anti-short-cycle program ("antipendelprogramma"), an operating
+    # state, not a fault: after reaching its flow temperature the boiler is held off
+    # for a while so it does not switch on and off constantly — typically because the
+    # heat could not be taken up fast enough (closed radiator valves, low flow). On a
+    # real install they came 33x in 10 days, each for 1-2 min, all with cause code 0,
+    # and each flipped the "boiler problem" sensor on. A non-zero cause code still
+    # makes it a fault (see is_fault).
+    "0A": ("Waiting — anti-short-cycle program", False),
+    "0Y": ("Waiting — anti-short-cycle program", False),
     "2E": ("Boiler water pressure too low", True),
     "H07": ("Boiler water pressure too low", True),
     "2F": ("Sensors measured an abnormal temperature", True),

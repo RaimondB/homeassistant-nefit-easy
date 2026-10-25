@@ -14,8 +14,8 @@ from custom_components.nefit_easy.sensor import SENSORS
         ("-H", "Central heating active", False),
         ("=H", "Hot water active", False),
         ("0H", "System standby", False),
-        ("0Y", "Waiting — boiler cannot transfer heat to central heating", False),
-        ("0A", "Waiting — boiler cannot transfer heat to central heating", False),
+        ("0Y", "Waiting — anti-short-cycle program", False),
+        ("0A", "Waiting — anti-short-cycle program", False),
         ("2E", "Boiler water pressure too low", True),
         ("6A", "Burner does not ignite", True),
         ("ZZ", "ZZ", None),  # unknown -> raw code, problem unknown
