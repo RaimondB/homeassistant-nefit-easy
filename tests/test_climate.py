@@ -55,7 +55,9 @@ async def test_set_hvac_mode(hass, mode, expected) -> None:
     entity = _climate(hass, {"UMD": "clock"}, client=client)
     await entity.async_set_hvac_mode(mode)
     client.put.assert_awaited_once_with(URI_USERMODE, {"value": expected})
-    entity.coordinator.async_request_refresh.assert_awaited_once()
+    # Shown at once, confirmed by the next scheduled poll: no extra poll.
+    entity.coordinator.async_request_refresh.assert_not_awaited()
+    assert entity.coordinator.data["uiStatus"]["UMD"] == expected
 
 
 async def test_set_temperature_flip_observed_via_refresh(hass) -> None:
@@ -65,6 +67,8 @@ async def test_set_temperature_flip_observed_via_refresh(hass) -> None:
 
     await entity.async_set_temperature(temperature=20)
     client.set_temperature.assert_awaited_once_with(20.0)
+    entity.coordinator.async_request_refresh.assert_not_awaited()
+    assert entity.target_temperature == 20.0
 
     # The device auto-flips; simulate the coordinator refresh result.
     entity.coordinator.data = {"uiStatus": {"UMD": "manual"}}
@@ -95,4 +99,5 @@ async def test_set_preset_mode(hass, preset, expected_on) -> None:
     entity = _climate(hass, {}, client=client)
     await entity.async_set_preset_mode(preset)
     client.set_fireplace_mode.assert_awaited_once_with(expected_on)
-    entity.coordinator.async_request_refresh.assert_awaited_once()
+    entity.coordinator.async_request_refresh.assert_not_awaited()
+    assert entity.preset_mode == preset
