@@ -24,6 +24,23 @@ from custom_components.nefit_easy.api.errors import (
 OK = "HTTP/1.1 200 OK\r\r"
 
 
+class _Clock:
+    def __init__(self) -> None:
+        self.now = 1000.0
+
+    def __call__(self) -> float:
+        return self.now
+
+    def advance(self, seconds: float) -> None:
+        self.now += seconds
+
+
+def _fake_clock(client) -> _Clock:
+    clock = _Clock()
+    client._gate.clock = clock
+    return clock
+
+
 @pytest.fixture
 async def nefit(hass):
     """A real NefitClient whose transport is faked at the socket boundary."""
@@ -101,6 +118,12 @@ async def test_two_timeouts_in_a_row_force_a_reconnect(nefit, monkeypatch) -> No
     assert not xmpp.session_live
 
     state["answer"] = True
+    clock = _fake_clock(client)
+    # The backend gets a minute before the first reconnect.
+    with pytest.raises(NefitConnectionError, match="Waiting"):
+        await client._request("GET /x HTTP/1.1\r\r")
+    xmpp.async_reconnect.assert_not_awaited()
+    clock.advance(60)
     assert await client._request("GET /x HTTP/1.1\r\r") == OK
     xmpp.async_reconnect.assert_awaited_once()
 
@@ -124,9 +147,15 @@ async def test_failed_reconnect_is_a_connection_error(nefit) -> None:
     client, xmpp, _, _ = nefit
     xmpp.async_reconnect.side_effect = NefitConnectionError("backend unreachable")
 
+    clock = _fake_clock(client)
     with pytest.raises(NefitConnectionError):
         await client._request("GET /x HTTP/1.1\r\r")
-    # The next poll simply tries again.
+    # A poll during the backoff does not touch the network...
+    with pytest.raises(NefitConnectionError, match="Waiting"):
+        await client._request("GET /x HTTP/1.1\r\r")
+    assert xmpp.async_reconnect.await_count == 1
+    # ...the one after it tries again.
+    clock.advance(60)
     with pytest.raises(NefitConnectionError):
         await client._request("GET /x HTTP/1.1\r\r")
     assert xmpp.async_reconnect.await_count == 2

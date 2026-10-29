@@ -128,13 +128,13 @@ class NefitXMPP(slixmpp.ClientXMPP):
                 self._host,
                 self._port,
             )
-            self.disconnect()
+            self._stop()
             raise NefitConnectionError(
                 f"Timed out establishing XMPP session to {self._host}:{self._port}"
             ) from err
         if self._error is not None:
             _LOGGER.error("Connection to Nefit backend failed: %s", self._error)
-            self.disconnect()
+            self._stop()
             raise self._error
         _LOGGER.debug("Nefit XMPP session established")
 
@@ -149,16 +149,30 @@ class NefitXMPP(slixmpp.ClientXMPP):
 
     async def async_reconnect(self, timeout: float = 30.0) -> None:  # noqa: ASYNC109
         """Drop whatever is left of the old stream and connect afresh."""
-        self._session_live = False
-        if self.is_connected():
-            self.abort()
+        self._stop()
         await self.async_connect(timeout)
 
     async def async_disconnect(self) -> None:
         if self._ping_task:
             self._ping_task.cancel()
             self._ping_task = None
+        self.cancel_connection_attempt()
         self.disconnect()
+
+    def _stop(self) -> None:
+        """Cancel a connect still in flight and drop the transport, if any.
+
+        slixmpp's disconnect() and abort() only act on an open transport. A
+        connect that has not got one yet keeps running and, when it fails,
+        reschedules itself with backoff for ever. Every failed connect and
+        every config-entry reload during a backend outage left one of those
+        behind; the strays all logged in as the same JID and kicked each
+        other off (2026-10-28: 10 drops in 3 s, 48 min unavailable).
+        """
+        self._session_live = False
+        self.cancel_connection_attempt()
+        if self.transport:
+            self.abort()
 
     # -- event handlers ---------------------------------------------------
     def _on_session_bind(self, jid: object) -> None:
