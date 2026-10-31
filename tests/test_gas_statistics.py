@@ -142,6 +142,31 @@ async def test_metadata_objects(monkeypatch) -> None:
     assert om["unit_of_measurement"] == "°C"
 
 
+@pytest.mark.parametrize("supported", [True, False])
+async def test_unit_class_only_where_the_recorder_knows_it(
+    monkeypatch, supported
+) -> None:
+    """Required from HA 2026.11; an unknown key crashes older recorders."""
+    monkeypatch.setattr(
+        "custom_components.nefit_easy.gas_statistics._HAS_UNIT_CLASS", supported
+    )
+    pages = {1: [_row(date(2024, 1, 1), 1.0, 1.0, 3.0)]}
+    gas, added, _ = _make(monkeypatch, pages=pages, pointer=1)
+    await gas.async_backfill()
+    meta_by_id = {m["statistic_id"]: m for m, _ in added}
+    expected = {
+        STAT_ID_CH: "energy",
+        STAT_ID_HW: "energy",
+        STAT_ID_TOTAL: "energy",
+        STAT_ID_OUTDOOR: "temperature",
+    }
+    for sid, unit_class in expected.items():
+        if supported:
+            assert meta_by_id[sid]["unit_class"] == unit_class
+        else:
+            assert "unit_class" not in meta_by_id[sid]
+
+
 async def test_idempotent_resume(monkeypatch) -> None:
     pages = {1: [_row(date(2024, 1, 1), 10.0, 2.0, 5.0)]}
     gas, added, last = _make(monkeypatch, pages=pages, pointer=1)
