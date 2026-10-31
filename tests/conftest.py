@@ -15,6 +15,16 @@ def auto_enable_custom_integrations(enable_custom_integrations):
     yield
 
 
+@pytest.fixture(autouse=True)
+def fresh_reconnect_gates():
+    """The reconnect backoff is process-wide; no test inherits another's."""
+    from custom_components.nefit_easy.api import client as client_mod
+
+    client_mod._GATES.clear()
+    yield
+    client_mod._GATES.clear()
+
+
 @pytest.fixture
 def mock_client() -> AsyncMock:
     """A mocked NefitClient returning canned endpoint payloads."""

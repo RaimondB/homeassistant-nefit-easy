@@ -10,6 +10,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
+from collections.abc import Awaitable, Callable
 from datetime import date
 from functools import partial
 from typing import TYPE_CHECKING, Any
@@ -29,7 +31,60 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 _REQUEST_TIMEOUT = 30.0
+# A session that stops answering is as dead as a dropped one. The 2026-10-21
+# outage began with "No response from Nefit gateway" before the stream closed.
+_MAX_CONSECUTIVE_TIMEOUTS = 2
 _USER_AGENT = "NefitEasy"
+
+# Connection attempts are spaced, because a backend that is hit too often
+# drops the session again. After a drop the first reconnect waits a minute,
+# then each failure doubles the wait, up to ten minutes.
+_RECONNECT_FIRST_DELAY = 60.0
+_RECONNECT_MAX_DELAY = 600.0
+# The coordinator polls once a minute; the slack keeps a poll that fires a
+# few milliseconds early from being turned away for a whole interval.
+_RECONNECT_SLACK = 5.0
+
+
+class ReconnectGate:
+    """When the next connection attempt to one boiler may be made.
+
+    Kept per serial number for the life of the process, so a config-entry
+    reload (manual, or an automation's self-heal) does not reset the backoff
+    and start hammering the backend afresh.
+    """
+
+    def __init__(self) -> None:
+        self.failures = 0
+        self.not_before = 0.0
+        self.clock = time.monotonic
+
+    def check(self) -> None:
+        wait = self.not_before - self.clock()
+        if wait > _RECONNECT_SLACK:
+            raise NefitConnectionError(
+                f"Waiting {wait:.0f}s before reconnecting to the Nefit backend"
+            )
+
+    def lost(self) -> None:
+        """A live session went away: give the backend a minute first."""
+        self.not_before = max(self.not_before, self.clock() + _RECONNECT_FIRST_DELAY)
+
+    def failed(self) -> None:
+        delay = min(_RECONNECT_FIRST_DELAY * 2**self.failures, _RECONNECT_MAX_DELAY)
+        self.failures += 1
+        self.not_before = self.clock() + delay
+        _LOGGER.info(
+            "Nefit connection attempt %d failed; next attempt in %.0fs",
+            self.failures,
+            delay,
+        )
+
+    def succeeded(self) -> None:
+        self.failures = 0
+
+
+_GATES: dict[str, ReconnectGate] = {}
 
 
 async def async_create_client(
@@ -65,10 +120,24 @@ class NefitClient:
         self._crypto = NefitCrypto(access_key, password)
         self._lock = asyncio.Lock()
         self._response: asyncio.Future[str] | None = None
+        self._timeouts = 0
+        self._gate = _GATES.setdefault(serial_number, ReconnectGate())
+        self._had_session = False
         self._xmpp.set_message_callback(self._on_body)
 
     async def connect(self) -> None:
-        await self._xmpp.async_connect()
+        await self._gated(self._xmpp.async_connect)
+
+    async def _gated(self, attempt: Callable[[], Awaitable[None]]) -> None:
+        self._gate.check()
+        try:
+            await attempt()
+        except Exception:
+            self._gate.failed()
+            raise
+        self._gate.succeeded()
+        self._had_session = True
+        self._timeouts = 0
 
     async def disconnect(self) -> None:
         await self._xmpp.async_disconnect()
@@ -93,8 +162,28 @@ class NefitClient:
                 headers[k.strip().lower()] = v.strip()
         return status, headers, body.strip()
 
+    async def _ensure_session(self) -> None:
+        """Reconnect when the XMPP session is gone (dropped or unresponsive).
+
+        A failed or not-yet-allowed reconnect raises NefitConnectionError, so
+        the coordinator marks the poll failed and tries again on a later
+        interval, once the reconnect gate allows it — no restart of Home
+        Assistant needed.
+        """
+        if self._xmpp.session_live:
+            self._had_session = True
+            return
+        if self._had_session:
+            self._had_session = False
+            self._gate.lost()
+        self._gate.check()
+        _LOGGER.info("No live XMPP session; reconnecting to the Nefit backend")
+        await self._gated(self._xmpp.async_reconnect)
+        _LOGGER.info("Reconnected to the Nefit backend")
+
     async def _request(self, message: str) -> str:
         async with self._lock:
+            await self._ensure_session()
             loop = asyncio.get_running_loop()
             self._response = loop.create_future()
             # Log the request line + headers only (never the encrypted
@@ -104,14 +193,22 @@ class NefitClient:
                 "--> request:\n%s",
                 head.replace("\r", "\\r").replace("\n", "\\n\n"),
             )
-            self._xmpp.send_body(message)
             try:
+                self._xmpp.send_body(message)
                 async with asyncio.timeout(_REQUEST_TIMEOUT):
                     raw = await self._response
             except TimeoutError as err:
+                self._timeouts += 1
+                if self._timeouts >= _MAX_CONSECUTIVE_TIMEOUTS:
+                    _LOGGER.warning(
+                        "%d requests in a row unanswered; reconnecting on the next one",
+                        self._timeouts,
+                    )
+                    self._xmpp.mark_dead()
                 raise NefitTimeoutError("No response from Nefit gateway") from err
             finally:
                 self._response = None
+            self._timeouts = 0
             _LOGGER.debug(
                 "<-- response (%d bytes):\n%s",
                 len(raw),

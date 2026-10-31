@@ -38,7 +38,8 @@ async def test_hot_water_turn_on_uses_user_mode(hass) -> None:
     )
     await NefitHotWaterSwitch(coord).async_turn_on()
     client.set_hot_water_supply.assert_awaited_once_with(True, "clock")
-    coord.async_request_refresh.assert_awaited_once()
+    coord.async_request_refresh.assert_not_awaited()
+    assert NefitHotWaterSwitch(coord).is_on is True
 
 
 @pytest.mark.parametrize(
@@ -55,3 +56,10 @@ async def test_fireplace_turn_off(hass) -> None:
     coord = _coord(hass, {"uiStatus": {"FPA": "on"}}, client)
     await NefitFireplaceSwitch(coord).async_turn_off()
     client.set_fireplace_mode.assert_awaited_once_with(False)
+
+
+async def test_fireplace_turn_off_shows_at_once(hass) -> None:
+    coord = _coord(hass, {"uiStatus": {"FPA": "on"}})
+    await NefitFireplaceSwitch(coord).async_turn_off()
+    coord.async_request_refresh.assert_not_awaited()
+    assert NefitFireplaceSwitch(coord).is_on is False
