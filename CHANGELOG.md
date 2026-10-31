@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.1](https://github.com/RaimondB/homeassistant-nefit-easy/compare/homeassistant-nefit-easy-v0.3.0...homeassistant-nefit-easy-v0.3.1) (2026-10-31)
+
+
+### Bug Fixes
+
+* **deps:** Bump slixmpp from 1.15.0 to 1.16.0 ([#27](https://github.com/RaimondB/homeassistant-nefit-easy/issues/27)) ([fa2332d](https://github.com/RaimondB/homeassistant-nefit-easy/commit/fa2332da3dbad481afa86b53ada4cd8441aa8f2a))
+* **deps:** relax the slixmpp pin and drop cryptography from the manifest ([c5f8985](https://github.com/RaimondB/homeassistant-nefit-easy/commit/c5f8985f6d8ba1e1991132e771fead18651b8e6d))
+* **deps:** relax the slixmpp pin and drop cryptography from the manifest ([f1c00e7](https://github.com/RaimondB/homeassistant-nefit-easy/commit/f1c00e7f3ece133726a8ad1724da7aa9281032f3))
+* **sensor:** drop the no-sensor pressure marker instead of reporting 25.5 bar ([0cd6d03](https://github.com/RaimondB/homeassistant-nefit-easy/commit/0cd6d033300c580bf4349ca6961cf27425b3c170))
+* **statistics:** pass unit_class to async_add_external_statistics ([bf4c7cd](https://github.com/RaimondB/homeassistant-nefit-easy/commit/bf4c7cd7b0d9fdc2f5806d35fc402624eaba5c15))
+* **statistics:** pass unit_class to async_add_external_statistics ([10f9561](https://github.com/RaimondB/homeassistant-nefit-easy/commit/10f9561aecf6bdfccb0303dd2883183aad65d5fd))
+
 ## [0.3.0](https://github.com/RaimondB/homeassistant-nefit-easy/compare/homeassistant-nefit-easy-v0.2.0...homeassistant-nefit-easy-v0.3.0) (2026-06-27)
 
 
