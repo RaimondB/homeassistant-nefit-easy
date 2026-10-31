@@ -36,6 +36,7 @@ from homeassistant.components.recorder.statistics import (
 )
 from homeassistant.const import UnitOfEnergy
 from homeassistant.helpers.recorder import get_instance
+from homeassistant.util.unit_conversion import EnergyConverter, TemperatureConverter
 
 # mean_type was added in HA 2025.x; guard so the same code runs on
 # older HA installs (phacc pin) and produces no deprecation warning
@@ -69,6 +70,10 @@ if TYPE_CHECKING:
     from .api import NefitClient
 
 _LOGGER = logging.getLogger(__name__)
+
+# Required from HA 2026.11. Older recorders build their row with
+# StatisticsMeta(**metadata), so there the key must stay out or the import fails.
+_HAS_UNIT_CLASS = "unit_class" in StatisticMetaData.__annotations__
 
 # Energy statistics (cumulative sum) keyed by statistic_id -> friendly name.
 _ENERGY_STATS: dict[str, str] = {
@@ -273,6 +278,8 @@ class NefitGasStatistics:
             }
             if _MEAN_NONE is not None:
                 meta["mean_type"] = _MEAN_NONE  # type: ignore[typeddict-unknown-key]
+            if _HAS_UNIT_CLASS:
+                meta["unit_class"] = EnergyConverter.UNIT_CLASS  # type: ignore[typeddict-unknown-key]
             metadata = meta
             async_add_external_statistics(self._hass, metadata, stats)
             _LOGGER.debug("Published %d rows to %s", len(stats), statistic_id)
@@ -297,6 +304,8 @@ class NefitGasStatistics:
         }
         if _MEAN_ARITHMETIC is not None:
             meta_out["mean_type"] = _MEAN_ARITHMETIC  # type: ignore[typeddict-unknown-key]
+        if _HAS_UNIT_CLASS:
+            meta_out["unit_class"] = TemperatureConverter.UNIT_CLASS  # type: ignore[typeddict-unknown-key]
         metadata = meta_out
         async_add_external_statistics(self._hass, metadata, stats)
         _LOGGER.debug("Published %d rows to %s", len(stats), STAT_ID_OUTDOOR)
