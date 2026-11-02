@@ -74,7 +74,7 @@ class ReconnectGate:
         delay = min(_RECONNECT_FIRST_DELAY * 2**self.failures, _RECONNECT_MAX_DELAY)
         self.failures += 1
         self.not_before = self.clock() + delay
-        _LOGGER.info(
+        _LOGGER.warning(
             "Nefit connection attempt %d failed; next attempt in %.0fs",
             self.failures,
             delay,
@@ -178,8 +178,14 @@ class NefitClient:
             self._gate.lost()
         self._gate.check()
         _LOGGER.info("No live XMPP session; reconnecting to the Nefit backend")
+        failed = self._gate.failures
         await self._gated(self._xmpp.async_reconnect)
-        _LOGGER.info("Reconnected to the Nefit backend")
+        # WARNING, not INFO: Home Assistant hands only WARNING and up to
+        # automations (system_log_event), and a drop that recovered by itself
+        # should leave a trace that outlives the log.
+        _LOGGER.warning(
+            "Reconnected to the Nefit backend after %d failed attempt(s)", failed
+        )
 
     async def _request(self, message: str) -> str:
         async with self._lock:

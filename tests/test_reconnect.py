@@ -169,3 +169,32 @@ async def test_disconnect_event_marks_the_session_dead(nefit, caplog) -> None:
     xmpp._on_disconnected("connection reset by peer")
     assert not xmpp.session_live
     assert "Lost the XMPP connection" in caplog.text
+
+
+async def test_reconnect_and_failed_attempts_are_warnings(nefit, caplog) -> None:
+    """Home Assistant automations only see WARNING and up (system_log_event)."""
+    client, xmpp, _, go_live = nefit
+    clock = _fake_clock(client)
+    go_live()
+    await client._request("GET /x HTTP/1.1\r\r")
+    xmpp.transport = None  # the stream drops
+    with pytest.raises(NefitConnectionError, match="Waiting"):
+        await client._request("GET /x HTTP/1.1\r\r")
+
+    xmpp.async_reconnect.side_effect = NefitConnectionError("backend unreachable")
+    clock.advance(60)
+    with pytest.raises(NefitConnectionError, match="unreachable"):
+        await client._request("GET /x HTTP/1.1\r\r")
+    xmpp.async_reconnect.side_effect = lambda timeout=30.0: go_live()
+    clock.advance(60)
+    assert await client._request("GET /x HTTP/1.1\r\r") == OK
+
+    warnings = [
+        r.getMessage()
+        for r in caplog.records
+        if r.name == client_mod.__name__ and r.levelname == "WARNING"
+    ]
+    assert warnings == [
+        "Nefit connection attempt 1 failed; next attempt in 60s",
+        "Reconnected to the Nefit backend after 1 failed attempt(s)",
+    ]
