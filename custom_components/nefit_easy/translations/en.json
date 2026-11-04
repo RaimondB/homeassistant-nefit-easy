@@ -63,6 +63,14 @@
       },
       "boiler_status": {
         "name": "Boiler status"
+      },
+      "connection": {
+        "name": "Connection",
+        "state": {
+          "ok": "OK",
+          "thermostat_offline": "Thermostat offline",
+          "backend_unreachable": "Bosch backend unreachable"
+        }
       }
     },
     "binary_sensor": {

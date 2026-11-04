@@ -15,8 +15,10 @@ import asyncio
 import logging
 import ssl
 from collections.abc import Callable
+from xml.etree import ElementTree as ET
 
 import slixmpp
+from slixmpp.exceptions import IqError, IqTimeout
 from slixmpp.xmlstream.xmlstream import NotConnectedError
 
 from ..const import (
@@ -31,6 +33,7 @@ from .errors import NefitAuthError, NefitConnectionError
 _LOGGER = logging.getLogger(__name__)
 
 _PING_INTERVAL = 30.0
+_SERVER_PING_TIMEOUT = 10.0
 
 
 class NefitXMPP(slixmpp.ClientXMPP):
@@ -157,7 +160,43 @@ class NefitXMPP(slixmpp.ClientXMPP):
             self._ping_task.cancel()
             self._ping_task = None
         self.cancel_connection_attempt()
-        self.disconnect()
+        # A close we ask for is not a lost connection: without this the
+        # `disconnected` event logs "Lost the XMPP connection" and every
+        # unload or restart counted as a drop.
+        self._session_live = False
+        # Closes an open stream (at most ~2 s), else only fires `disconnected`.
+        await self.disconnect()
+        # slixmpp starts its outgoing-filter task on connect and never stops
+        # it; left pending it outlives the client ("Task was destroyed but it
+        # is pending", 16 times after the failed setups of 2026-11-03).
+        filters = getattr(self, "_run_out_filters", None)
+        if filters is not None and not filters.done():
+            filters.cancel()
+
+    async def async_server_alive(
+        self,
+        timeout: float = _SERVER_PING_TIMEOUT,  # noqa: ASYNC109
+    ) -> bool:
+        """Whether the Bosch server still answers on this session.
+
+        An XEP-0199 ping to the server. Any reply counts, an error too: a
+        server without ping support still proves the stream is alive. Tells a
+        silent thermostat (the session is fine) from a dead session, which
+        look the same from the request side.
+        """
+        if not self.session_live:
+            return False
+        iq = self.Iq()
+        iq["type"] = "get"
+        iq["to"] = self._host
+        iq.xml.append(ET.Element("{urn:xmpp:ping}ping"))
+        try:
+            await iq.send(timeout=timeout)
+        except IqError:
+            return True
+        except (IqTimeout, NotConnectedError):
+            return False
+        return True
 
     def _stop(self) -> None:
         """Cancel a connect still in flight and drop the transport, if any.

@@ -66,6 +66,8 @@ async def nefit(hass):
 
     xmpp.send_raw = send_raw
     xmpp.async_reconnect = AsyncMock(side_effect=reconnect)
+    # The server is gone too unless a test says otherwise.
+    xmpp.async_server_alive = AsyncMock(return_value=False)
     yield client, xmpp, state, go_live
     xmpp.transport = None
     await client.disconnect()
@@ -198,3 +200,58 @@ async def test_reconnect_and_failed_attempts_are_warnings(nefit, caplog) -> None
         "Nefit connection attempt 1 failed; next attempt in 60s",
         "Reconnected to the Nefit backend after 1 failed attempt(s)",
     ]
+
+
+async def test_silent_thermostat_keeps_the_session(nefit, caplog, monkeypatch) -> None:
+    """The server answers, only the thermostat does not: do not reconnect."""
+    client, xmpp, state, go_live = nefit
+    monkeypatch.setattr(client_mod, "_REQUEST_TIMEOUT", 0.01)
+    go_live()
+    xmpp.async_server_alive.return_value = True
+    changes = []
+    remove = client.add_state_listener(lambda: changes.append(client.connection_state))
+    state["answer"] = False
+
+    for _ in range(4):
+        with pytest.raises(NefitTimeoutError):
+            await client._request("GET /x HTTP/1.1\r\r")
+    assert xmpp.session_live
+    assert client.connection_state == "thermostat_offline"
+    xmpp.async_reconnect.assert_not_awaited()
+
+    state["answer"] = True
+    assert await client._request("GET /x HTTP/1.1\r\r") == OK
+    assert client.connection_state == "ok"
+    assert changes == ["thermostat_offline", "ok"]
+    remove()
+    xmpp.async_server_alive.return_value = False
+    state["answer"] = False
+    for _ in range(2):
+        with pytest.raises(NefitTimeoutError):
+            await client._request("GET /x HTTP/1.1\r\r")
+    assert changes == ["thermostat_offline", "ok"]  # listener removed
+
+    warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+    assert sum("thermostat does not" in w for w in warnings) == 1  # once per episode
+    assert "The Nefit thermostat answers again" in warnings
+
+
+async def test_silent_server_drops_the_session(nefit, monkeypatch) -> None:
+    client, xmpp, state, go_live = nefit
+    monkeypatch.setattr(client_mod, "_REQUEST_TIMEOUT", 0.01)
+    go_live()
+    state["answer"] = False
+    for _ in range(2):
+        with pytest.raises(NefitTimeoutError):
+            await client._request("GET /x HTTP/1.1\r\r")
+    assert not xmpp.session_live
+    assert client.connection_state == "backend_unreachable"
+    xmpp.async_server_alive.assert_awaited_once()
+
+
+async def test_failed_reconnect_reports_backend_unreachable(nefit) -> None:
+    client, xmpp, _, _ = nefit
+    xmpp.async_reconnect.side_effect = NefitConnectionError("backend unreachable")
+    with pytest.raises(NefitConnectionError):
+        await client._request("GET /x HTTP/1.1\r\r")
+    assert client.connection_state == "backend_unreachable"

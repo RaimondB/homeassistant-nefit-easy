@@ -10,11 +10,13 @@ same JID and kicked each other off (10 drops in 3 s).
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.config_entries import ConfigEntryState
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+from slixmpp.exceptions import IqError, IqTimeout
+from slixmpp.xmlstream.xmlstream import NotConnectedError
 
 from custom_components.nefit_easy.api import async_create_client
 from custom_components.nefit_easy.api.client import ReconnectGate
@@ -85,7 +87,7 @@ async def test_disconnect_cancels_a_pending_attempt(xmpp) -> None:
     assert pending.cancelled()
 
 
-def test_backoff_doubles_to_ten_minutes_and_resets() -> None:
+def test_backoff_doubles_to_five_minutes_and_resets() -> None:
     gate = ReconnectGate()
     now = [0.0]
     gate.clock = lambda: now[0]
@@ -94,7 +96,7 @@ def test_backoff_doubles_to_ten_minutes_and_resets() -> None:
         gate.failed()
         waits.append(gate.not_before - now[0])
         now[0] = gate.not_before
-    assert waits == [60, 120, 240, 480, 600, 600]
+    assert waits == [60, 120, 240, 300, 300, 300]
     gate.succeeded()
     gate.failed()
     assert gate.not_before - now[0] == 60
@@ -148,3 +150,72 @@ async def test_failed_setup_stops_the_client(hass, mock_client, fail_on) -> None
         await hass.config_entries.async_setup(entry.entry_id)
     assert entry.state is ConfigEntryState.SETUP_RETRY
     mock_client.disconnect.assert_awaited()
+
+
+async def test_disconnect_stops_the_filter_task(xmpp) -> None:
+    filters = asyncio.ensure_future(asyncio.sleep(3600))
+    xmpp._run_out_filters = filters
+    await xmpp.async_disconnect()
+    await asyncio.sleep(0)
+    assert filters.cancelled()
+
+
+def _fake_iq(xmpp, outcome):
+    sent = []
+
+    class _Iq(dict):
+        def __init__(self):
+            super().__init__()
+            self.xml = []
+
+        async def send(self, timeout=None):  # noqa: ASYNC109 - slixmpp's signature
+            sent.append((dict(self), [e.tag for e in self.xml], timeout))
+            if isinstance(outcome, BaseException):
+                raise outcome
+
+    xmpp.Iq = _Iq
+    return sent
+
+
+@pytest.mark.parametrize(
+    ("outcome", "alive"),
+    [
+        (None, True),
+        # Built without a stanza: only the type matters here.
+        (IqError.__new__(IqError), True),  # an error reply still proves the stream
+        (IqTimeout.__new__(IqTimeout), False),
+        (NotConnectedError(), False),
+    ],
+)
+async def test_server_ping(xmpp, outcome, alive) -> None:
+    xmpp.transport = MagicMock()
+    xmpp._session_live = True
+    sent = _fake_iq(xmpp, outcome)
+    assert await xmpp.async_server_alive() is alive
+    ((iq, tags, timeout),) = sent
+    assert iq == {"type": "get", "to": "wa2-mz36-qrmzh6.bosch.de"}
+    assert tags == ["{urn:xmpp:ping}ping"]
+    assert timeout == 10.0
+    xmpp.transport = None
+
+
+async def test_no_ping_without_a_session(xmpp) -> None:
+    sent = _fake_iq(xmpp, None)
+    assert await xmpp.async_server_alive() is False
+    assert sent == []
+
+
+async def test_failed_first_connect_reports_backend_unreachable(hass) -> None:
+    client = await async_create_client(hass, "757921601", "a", "b")
+    client._xmpp.async_connect = AsyncMock(side_effect=NefitConnectionError("x"))
+    with pytest.raises(NefitConnectionError):
+        await client.connect()
+    assert client.connection_state == "backend_unreachable"
+    await client.disconnect()
+
+
+async def test_a_requested_disconnect_is_not_a_lost_connection(xmpp, caplog) -> None:
+    xmpp._session_live = True
+    xmpp._ready.set()
+    await xmpp.async_disconnect()
+    assert "Lost the XMPP connection" not in caplog.text
