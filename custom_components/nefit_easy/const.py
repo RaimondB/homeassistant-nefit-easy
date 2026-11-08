@@ -74,3 +74,16 @@ CONF_IMPORT_GAS_HISTORY: Final = "import_gas_history"
 DEFAULT_IMPORT_GAS_HISTORY: Final = False
 
 SERVICE_IMPORT_GAS_HISTORY: Final = "import_gas_history"
+
+
+# Which side of the link is down (sensor.connection). The thermostat reaches
+# the Bosch backend over its own Wi-Fi; our session can be fine while it is
+# not.
+CONNECTION_OK: Final = "ok"
+CONNECTION_THERMOSTAT_OFFLINE: Final = "thermostat_offline"
+CONNECTION_BACKEND_UNREACHABLE: Final = "backend_unreachable"
+CONNECTION_STATES: Final = (
+    CONNECTION_OK,
+    CONNECTION_THERMOSTAT_OFFLINE,
+    CONNECTION_BACKEND_UNREACHABLE,
+)

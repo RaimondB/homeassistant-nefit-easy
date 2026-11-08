@@ -13,12 +13,12 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfPressure, UnitOfTemperature
+from homeassistant.const import EntityCategory, UnitOfPressure, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .boiler_codes import describe
-from .const import DOMAIN
+from .const import CONNECTION_STATES, DOMAIN
 from .coordinator import NefitDataUpdateCoordinator
 from .entity import NefitEntity
 
@@ -94,7 +94,12 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: NefitDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities(NefitSensor(coordinator, desc) for desc in SENSORS)
+    async_add_entities(
+        [
+            *(NefitSensor(coordinator, desc) for desc in SENSORS),
+            NefitConnectionSensor(coordinator),
+        ]
+    )
 
 
 class NefitSensor(NefitEntity, SensorEntity):
@@ -120,3 +125,35 @@ class NefitSensor(NefitEntity, SensorEntity):
         if self.entity_description.attrs_fn is None:
             return None
         return self.entity_description.attrs_fn(self.coordinator.data or {})
+
+
+class NefitConnectionSensor(NefitEntity, SensorEntity):
+    """Which side is down: the Bosch backend, or the thermostat behind it.
+
+    Stays available while the other entities are not — that is when it
+    matters — and follows the client directly, because the coordinator stops
+    notifying entities while polls keep failing.
+    """
+
+    _attr_translation_key = "connection"
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = list(CONNECTION_STATES)
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator: NefitDataUpdateCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{self._serial}_connection"
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            self.coordinator.client.add_state_listener(self.async_write_ha_state)
+        )
+
+    @property
+    def available(self) -> bool:
+        return True
+
+    @property
+    def native_value(self) -> str:
+        return self.coordinator.client.connection_state

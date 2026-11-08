@@ -112,18 +112,20 @@ class NefitClimate(NefitEntity, ClimateEntity):
         await self.coordinator.client.set_fireplace_mode(
             preset_mode == PRESET_FIREPLACE
         )
-        await self.coordinator.async_request_refresh()
+        self.coordinator.async_patch_status(
+            FPA="on" if preset_mode == PRESET_FIREPLACE else "off"
+        )
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         if (temp := kwargs.get(ATTR_TEMPERATURE)) is None:
             return
         # The device auto-flips UMD to "manual" until the next scheduled
-        # switch point; we don't set the mode here — the refresh below
-        # surfaces UMD=manual and hvac_mode becomes HEAT.
+        # switch point; we don't set the mode here — the next poll surfaces
+        # UMD=manual and hvac_mode becomes HEAT.
         await self.coordinator.client.set_temperature(float(temp))
-        await self.coordinator.async_request_refresh()
+        self.coordinator.async_patch_status(TSP=float(temp))
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         mode = "manual" if hvac_mode == HVACMode.HEAT else "clock"
         await self.coordinator.client.put(URI_USERMODE, {"value": mode})
-        await self.coordinator.async_request_refresh()
+        self.coordinator.async_patch_status(UMD=mode)

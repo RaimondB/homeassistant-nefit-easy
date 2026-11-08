@@ -32,6 +32,8 @@ class _NefitSwitch(NefitEntity, SwitchEntity):
     """Base for the optimistic Nefit switches."""
 
     _key: str
+    # uiStatus field the switch writes, patched in until the next poll.
+    _status_field: str
 
     def __init__(self, coordinator: NefitDataUpdateCoordinator) -> None:
         super().__init__(coordinator)
@@ -42,17 +44,18 @@ class _NefitSwitch(NefitEntity, SwitchEntity):
 
     async def async_turn_on(self, **_kwargs: Any) -> None:
         await self._write(True)
-        await self.coordinator.async_request_refresh()
+        self.coordinator.async_patch_status(**{self._status_field: "on"})
 
     async def async_turn_off(self, **_kwargs: Any) -> None:
         await self._write(False)
-        await self.coordinator.async_request_refresh()
+        self.coordinator.async_patch_status(**{self._status_field: "off"})
 
 
 class NefitHotWaterSwitch(_NefitSwitch):
     """Hot-water supply on/off (program-mode aware)."""
 
     _key = "hot_water_supply"
+    _status_field = "DHW"
     _attr_translation_key = "hot_water_supply"
 
     @property
@@ -71,6 +74,7 @@ class NefitFireplaceSwitch(_NefitSwitch):
     """Fireplace mode on/off (FPA in uiStatus)."""
 
     _key = "fireplace_mode"
+    _status_field = "FPA"
     _attr_translation_key = "fireplace_mode"
 
     @property
