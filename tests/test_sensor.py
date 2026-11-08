@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import json
 import pathlib
+from unittest.mock import MagicMock
 
 import pytest
 from homeassistant.components.sensor import SensorDeviceClass
 
-from custom_components.nefit_easy.sensor import SENSORS
+from custom_components.nefit_easy.coordinator import NefitDataUpdateCoordinator
+from custom_components.nefit_easy.sensor import SENSORS, NefitConnectionSensor
 
 _CC = pathlib.Path("custom_components/nefit_easy")
 
@@ -53,3 +55,17 @@ def test_translation_files_identical_and_have_boiler_indicator() -> None:
         "central_heating",
         "hot_water",
     }
+
+
+async def test_connection_sensor_stays_available_and_follows_the_client(hass) -> None:
+    entry = MagicMock()
+    entry.data = {"serial_number": "ABC123"}
+    client = MagicMock()
+    client.connection_state = "thermostat_offline"
+    coordinator = NefitDataUpdateCoordinator(hass, entry, client, scan_interval=60)
+    coordinator.last_update_success = False  # the other entities are unavailable
+    sensor = NefitConnectionSensor(coordinator)
+    assert sensor.available is True
+    assert sensor.native_value == "thermostat_offline"
+    assert sensor.options == ["ok", "thermostat_offline", "backend_unreachable"]
+    assert sensor.unique_id == "ABC123_connection"

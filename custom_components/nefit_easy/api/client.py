@@ -10,11 +10,16 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
+from collections.abc import Awaitable, Callable
 from datetime import date
 from functools import partial
 from typing import TYPE_CHECKING, Any
 
 from ..const import (
+    CONNECTION_BACKEND_UNREACHABLE,
+    CONNECTION_OK,
+    CONNECTION_THERMOSTAT_OFFLINE,
     GAS_SENTINEL_DATE,
     URI_GASUSAGE_PAGE,
     URI_GASUSAGE_POINTER,
@@ -29,7 +34,61 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 _REQUEST_TIMEOUT = 30.0
+# A session that stops answering is as dead as a dropped one. The 2026-10-21
+# outage began with "No response from Nefit gateway" before the stream closed.
+_MAX_CONSECUTIVE_TIMEOUTS = 2
 _USER_AGENT = "NefitEasy"
+
+# Connection attempts are spaced, because a backend that is hit too often
+# drops the session again. After a drop the first reconnect waits a minute,
+# then each failure doubles the wait, up to five minutes (ten added up to ten
+# minutes of lag after the backend came back, 2026-11-04).
+_RECONNECT_FIRST_DELAY = 60.0
+_RECONNECT_MAX_DELAY = 300.0
+# The coordinator polls once a minute; the slack keeps a poll that fires a
+# few milliseconds early from being turned away for a whole interval.
+_RECONNECT_SLACK = 5.0
+
+
+class ReconnectGate:
+    """When the next connection attempt to one boiler may be made.
+
+    Kept per serial number for the life of the process, so a config-entry
+    reload (manual, or an automation's self-heal) does not reset the backoff
+    and start hammering the backend afresh.
+    """
+
+    def __init__(self) -> None:
+        self.failures = 0
+        self.not_before = 0.0
+        self.clock = time.monotonic
+
+    def check(self) -> None:
+        wait = self.not_before - self.clock()
+        if wait > _RECONNECT_SLACK:
+            raise NefitConnectionError(
+                f"Waiting {wait:.0f}s before reconnecting to the Nefit backend"
+            )
+
+    def lost(self) -> None:
+        """A live session went away: give the backend a minute first."""
+        self.not_before = max(self.not_before, self.clock() + _RECONNECT_FIRST_DELAY)
+
+    def failed(self) -> None:
+        delay = min(_RECONNECT_FIRST_DELAY * 2**self.failures, _RECONNECT_MAX_DELAY)
+        self.failures += 1
+        self.not_before = self.clock() + delay
+        _LOGGER.warning(
+            "Nefit connection attempt %d failed; next attempt in %.0fs",
+            self.failures,
+            delay,
+        )
+
+    def succeeded(self) -> None:
+        self.failures = 0
+
+
+_GATES: dict[str, ReconnectGate] = {}
 
 
 async def async_create_client(
@@ -65,10 +124,50 @@ class NefitClient:
         self._crypto = NefitCrypto(access_key, password)
         self._lock = asyncio.Lock()
         self._response: asyncio.Future[str] | None = None
+        self._timeouts = 0
+        self._gate = _GATES.setdefault(serial_number, ReconnectGate())
+        self._had_session = False
+        self._state = CONNECTION_OK
+        self._state_listeners: list[Callable[[], None]] = []
         self._xmpp.set_message_callback(self._on_body)
 
+    # -- connection state ----------------------------------------------
+    @property
+    def connection_state(self) -> str:
+        """ok, thermostat_offline or backend_unreachable (const.CONNECTION_*)."""
+        return self._state
+
+    def add_state_listener(self, listener: Callable[[], None]) -> Callable[[], None]:
+        """Call ``listener`` on every state change; returns the remover.
+
+        The coordinator stops notifying entities while polls keep failing,
+        which is exactly when this state changes.
+        """
+        self._state_listeners.append(listener)
+        return lambda: self._state_listeners.remove(listener)
+
+    def _set_state(self, state: str) -> None:
+        if state == self._state:
+            return
+        self._state = state
+        for listener in list(self._state_listeners):
+            listener()
+
     async def connect(self) -> None:
-        await self._xmpp.async_connect()
+        await self._gated(self._xmpp.async_connect)
+
+    async def _gated(self, attempt: Callable[[], Awaitable[None]]) -> None:
+        self._gate.check()
+        try:
+            await attempt()
+        except Exception:
+            self._gate.failed()
+            self._set_state(CONNECTION_BACKEND_UNREACHABLE)
+            raise
+        self._gate.succeeded()
+        self._set_state(CONNECTION_OK)
+        self._had_session = True
+        self._timeouts = 0
 
     async def disconnect(self) -> None:
         await self._xmpp.async_disconnect()
@@ -93,8 +192,35 @@ class NefitClient:
                 headers[k.strip().lower()] = v.strip()
         return status, headers, body.strip()
 
+    async def _ensure_session(self) -> None:
+        """Reconnect when the XMPP session is gone (dropped or unresponsive).
+
+        A failed or not-yet-allowed reconnect raises NefitConnectionError, so
+        the coordinator marks the poll failed and tries again on a later
+        interval, once the reconnect gate allows it — no restart of Home
+        Assistant needed.
+        """
+        if self._xmpp.session_live:
+            self._had_session = True
+            return
+        if self._had_session:
+            self._had_session = False
+            self._gate.lost()
+        self._set_state(CONNECTION_BACKEND_UNREACHABLE)
+        self._gate.check()
+        _LOGGER.info("No live XMPP session; reconnecting to the Nefit backend")
+        failed = self._gate.failures
+        await self._gated(self._xmpp.async_reconnect)
+        # WARNING, not INFO: Home Assistant hands only WARNING and up to
+        # automations (system_log_event), and a drop that recovered by itself
+        # should leave a trace that outlives the log.
+        _LOGGER.warning(
+            "Reconnected to the Nefit backend after %d failed attempt(s)", failed
+        )
+
     async def _request(self, message: str) -> str:
         async with self._lock:
+            await self._ensure_session()
             loop = asyncio.get_running_loop()
             self._response = loop.create_future()
             # Log the request line + headers only (never the encrypted
@@ -104,20 +230,52 @@ class NefitClient:
                 "--> request:\n%s",
                 head.replace("\r", "\\r").replace("\n", "\\n\n"),
             )
-            self._xmpp.send_body(message)
             try:
+                self._xmpp.send_body(message)
                 async with asyncio.timeout(_REQUEST_TIMEOUT):
                     raw = await self._response
             except TimeoutError as err:
+                self._timeouts += 1
+                if self._timeouts >= _MAX_CONSECUTIVE_TIMEOUTS:
+                    await self._on_silence()
                 raise NefitTimeoutError("No response from Nefit gateway") from err
             finally:
                 self._response = None
+            self._timeouts = 0
+            if self._state == CONNECTION_THERMOSTAT_OFFLINE:
+                _LOGGER.warning("The Nefit thermostat answers again")
+            self._set_state(CONNECTION_OK)
             _LOGGER.debug(
                 "<-- response (%d bytes):\n%s",
                 len(raw),
                 raw.replace("\r", "\\r").replace("\n", "\\n\n")[:2000],
             )
             return raw
+
+    async def _on_silence(self) -> None:
+        """Requests go unanswered: is it the session, or the thermostat?
+
+        The thermostat reaches the backend over its own Wi-Fi. When it drops
+        off, our session stays fine and only its answers stop; a reconnect
+        then only cost a backoff window after the thermostat was back
+        (2026-11-04: about 8 needless reconnects in one outage). So keep the
+        session while the server still answers, and keep asking once a poll.
+        """
+        if await self._xmpp.async_server_alive():
+            if self._state != CONNECTION_THERMOSTAT_OFFLINE:
+                _LOGGER.warning(
+                    "The Bosch backend answers but the Nefit thermostat does not "
+                    "(%d requests unanswered); keeping the session",
+                    self._timeouts,
+                )
+            self._set_state(CONNECTION_THERMOSTAT_OFFLINE)
+            return
+        _LOGGER.warning(
+            "%d requests in a row unanswered; reconnecting on the next one",
+            self._timeouts,
+        )
+        self._xmpp.mark_dead()
+        self._set_state(CONNECTION_BACKEND_UNREACHABLE)
 
     async def get(self, uri: str) -> Any:
         """GET a Nefit endpoint and return the decoded JSON value."""

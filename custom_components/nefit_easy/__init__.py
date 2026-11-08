@@ -45,14 +45,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entry.data[CONF_ACCESS_KEY],
         entry.data[CONF_PASSWORD],
     )
-    try:
-        await client.connect()
-    except NefitError as err:
-        raise ConfigEntryNotReady(str(err)) from err
-
     scan_interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
     coordinator = NefitDataUpdateCoordinator(hass, entry, client, scan_interval)
-    await coordinator.async_config_entry_first_refresh()
+    try:
+        await client.connect()
+        await coordinator.async_config_entry_first_refresh()
+    except BaseException as err:
+        # A failed setup is never unloaded, so this is the only chance to
+        # stop the client; left running it keeps reconnecting on its own.
+        await client.disconnect()
+        if isinstance(err, NefitError):
+            raise ConfigEntryNotReady(str(err)) from err
+        raise
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
