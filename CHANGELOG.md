@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.3.1](https://github.com/RaimondB/homeassistant-nefit-easy/compare/homeassistant-nefit-easy-v0.3.0...homeassistant-nefit-easy-v0.3.1) (2026-11-08)
+
+
+### Bug Fixes
+
+* **client:** keep the session when only the thermostat is silent ([624db83](https://github.com/RaimondB/homeassistant-nefit-easy/commit/624db83761c90a3b30a67ccb03a790133ad92d6b))
+* **client:** log reconnects and failed attempts at WARNING ([2be4fd3](https://github.com/RaimondB/homeassistant-nefit-easy/commit/2be4fd31c65caa37d55bcb48b81181c49d59d870))
+* **codes:** 0Y/0A are waiting states, not boiler faults ([ac47c55](https://github.com/RaimondB/homeassistant-nefit-easy/commit/ac47c55e5d2bd5f4f84856b001719828763a9a5c))
+* **codes:** 0Y/0A are waiting states, not boiler faults ([8befdb4](https://github.com/RaimondB/homeassistant-nefit-easy/commit/8befdb4d5f517f6c22a046918bfca2a69a58dc67))
+* **codes:** name 0Y/0A for what they are — the anti-short-cycle program ([0a0ae6e](https://github.com/RaimondB/homeassistant-nefit-easy/commit/0a0ae6eab4556f704e50cfb60ccbe76bd0fcfe5c))
+* **deps:** Bump slixmpp from 1.15.0 to 1.16.0 ([#27](https://github.com/RaimondB/homeassistant-nefit-easy/issues/27)) ([fa2332d](https://github.com/RaimondB/homeassistant-nefit-easy/commit/fa2332da3dbad481afa86b53ada4cd8441aa8f2a))
+* **deps:** relax the slixmpp pin and drop cryptography from the manifest ([c5f8985](https://github.com/RaimondB/homeassistant-nefit-easy/commit/c5f8985f6d8ba1e1991132e771fead18651b8e6d))
+* **deps:** relax the slixmpp pin and drop cryptography from the manifest ([f1c00e7](https://github.com/RaimondB/homeassistant-nefit-easy/commit/f1c00e7f3ece133726a8ad1724da7aa9281032f3))
+* **sensor:** drop the no-sensor pressure marker instead of reporting 25.5 bar ([0cd6d03](https://github.com/RaimondB/homeassistant-nefit-easy/commit/0cd6d033300c580bf4349ca6961cf27425b3c170))
+* **statistics:** pass unit_class to async_add_external_statistics ([bf4c7cd](https://github.com/RaimondB/homeassistant-nefit-easy/commit/bf4c7cd7b0d9fdc2f5806d35fc402624eaba5c15))
+* **statistics:** pass unit_class to async_add_external_statistics ([10f9561](https://github.com/RaimondB/homeassistant-nefit-easy/commit/10f9561aecf6bdfccb0303dd2883183aad65d5fd))
+* **xmpp:** reconnect when the session drops or stops answering ([a335e5f](https://github.com/RaimondB/homeassistant-nefit-easy/commit/a335e5fea9a065e5e2bdc9427c525335280b2328))
+* **xmpp:** reconnect when the session drops or stops answering ([325aec7](https://github.com/RaimondB/homeassistant-nefit-easy/commit/325aec71524eeb01967341f851bf207d77315ecf))
+* **xmpp:** stop failed connects and space reconnects ([94388cd](https://github.com/RaimondB/homeassistant-nefit-easy/commit/94388cd4af12f38118a9be3c149a2c0277125bcf))
+
+
+### Performance Improvements
+
+* **coordinator:** poll uiStatus + display code, the rest on slow clocks ([244d407](https://github.com/RaimondB/homeassistant-nefit-easy/commit/244d4070236fca6c6962130f69e3b73aa544568d))
+
 ## [0.3.0](https://github.com/RaimondB/homeassistant-nefit-easy/compare/homeassistant-nefit-easy-v0.2.0...homeassistant-nefit-easy-v0.3.0) (2026-06-27)
 
 
