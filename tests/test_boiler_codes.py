@@ -14,6 +14,8 @@ from custom_components.nefit_easy.sensor import SENSORS
         ("-H", "Central heating active", False),
         ("=H", "Hot water active", False),
         ("0H", "System standby", False),
+        ("0Y", "Waiting — anti-short-cycle program", False),
+        ("0A", "Waiting — anti-short-cycle program", False),
         ("2E", "Boiler water pressure too low", True),
         ("6A", "Burner does not ignite", True),
         ("ZZ", "ZZ", None),  # unknown -> raw code, problem unknown
@@ -36,6 +38,8 @@ def test_describe_and_is_fault(code, msg, fault) -> None:
         ("ZZ", 0, False),  # unknown code, explicit no cause -> ok
         ("ZZ", None, None),  # unknown code, no info -> unknown
         ("2E", 0, True),  # known fault stays fault even if cause 0
+        ("0Y", 0, False),  # waiting state with no cause is not a problem
+        ("0Y", 211, True),  # ...but any cause code still is
     ],
 )
 def test_is_fault_with_cause(dc, cc, expected) -> None:
